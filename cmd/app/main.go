@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/cdlinkin/pingpong/internal/auth"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -52,8 +53,21 @@ func main() {
 		log.Fatalf("pool ping: %v", err)
 	}
 
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatalf("env no set")
+	}
+
+	repo := auth.NewRepository(pool)
+	service := auth.NewService(repo, []byte(jwtSecret))
+	handler := auth.NewHandler(service)
+	middleware := auth.NewMiddleware([]byte(jwtSecret))
+
 	mux := http.NewServeMux()
 
+	mux.Handle("GET /me", middleware.Auth(http.HandlerFunc(handler.Me)))
+	mux.HandleFunc("/login", handler.Login)
+	mux.HandleFunc("/register", handler.Register)
 	mux.HandleFunc("/health", health)
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
