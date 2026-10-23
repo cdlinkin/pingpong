@@ -108,3 +108,41 @@ func (h *Handler) CreateDirectChat(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+func (h *Handler) ListUserChats(rw http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(
+			rw,
+			"unauthorized",
+			http.StatusUnauthorized,
+		)
+		return
+	}
+	rw.Header().Set("Content-Type", "application/json")
+
+	chats, err := h.service.ListUserChats(r.Context(), userID)
+	if err != nil {
+		log.Printf("list user chats: %v", err)
+		http.Error(rw, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	response := make([]chatResponse, 0, len(chats))
+	for _, c := range chats {
+		response = append(response,
+			chatResponse{
+				ID:        c.ID,
+				Title:     c.Title,
+				Type:      c.Type,
+				CreatedAt: c.CreatedAt,
+			},
+		)
+	}
+
+	rw.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(rw).Encode(response); err != nil {
+		log.Printf("list user chats: encode response: %v", err)
+		return
+	}
+}

@@ -69,3 +69,18 @@ func (s *Service) CreateDirectChat(
 	}
 	return chatID, true, nil
 }
+
+func (s *Service) ListUserChats(
+	ctx context.Context,
+	userID int,
+) ([]ChatModel, error) {
+	chats, err := s.repository.ListUserChats(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list user chats: %w",
+			err,
+		)
+	}
+
+	return chats, nil
+}

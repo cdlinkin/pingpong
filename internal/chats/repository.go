@@ -141,3 +141,50 @@ func (r *Repository) FindDirectChat(
 
 	return chatID, nil
 }
+
+func (r *Repository) ListUserChats(
+	ctx context.Context,
+	userID int,
+) ([]ChatModel, error) {
+	query := `
+	SELECT c.id, c.title, c.type, c.created_at
+	FROM chats c
+	JOIN chat_members m ON m.chat_id = c.id
+	WHERE m.user_id = $1
+	ORDER BY c.created_at DESC
+	`
+
+	rows, err := r.pool.Query(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list user chats: %w",
+			err,
+		)
+	}
+	defer rows.Close()
+
+	var chats []ChatModel
+	for rows.Next() {
+		var c ChatModel
+		if err := rows.Scan(
+			&c.ID,
+			&c.Title,
+			&c.Type,
+			&c.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf(
+				"scan chat: %w",
+				err,
+			)
+		}
+		chats = append(chats, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"rows: %w",
+			err,
+		)
+	}
+
+	return chats, nil
+}
