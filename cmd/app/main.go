@@ -77,6 +77,7 @@ func main() {
 	mux.Handle("POST /chats/group", middleware.Auth(http.HandlerFunc(chatsHandler.CreateGroupChat)))
 	mux.Handle("POST /chats/direct", middleware.Auth(http.HandlerFunc(chatsHandler.CreateDirectChat)))
 	mux.Handle("GET /chats", middleware.Auth(http.HandlerFunc(chatsHandler.ListUserChats)))
+	mux.Handle("POST /chats/{id}/members", middleware.Auth(http.HandlerFunc(chatsHandler.AddMember)))
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("error to run server: %v", err)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/cdlinkin/pingpong/internal/auth"
 )
@@ -145,4 +146,46 @@ func (h *Handler) ListUserChats(rw http.ResponseWriter, r *http.Request) {
 		log.Printf("list user chats: encode response: %v", err)
 		return
 	}
+}
+
+func (h *Handler) AddMember(rw http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(
+			rw,
+			"unauthorized",
+			http.StatusUnauthorized,
+		)
+		return
+	}
+	chatID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(rw, "invalid chat id", http.StatusBadRequest)
+		return
+	}
+
+	var req addMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(rw, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if err = h.service.AddMember(r.Context(), userID, chatID, req.UserID); err != nil {
+		switch {
+		case errors.Is(err, ErrUserNotFound):
+			http.Error(rw, "user not found", http.StatusNotFound)
+		case errors.Is(err, ErrChatNotFound):
+			http.Error(rw, "chat not found", http.StatusNotFound)
+		case errors.Is(err, ErrForbidden):
+			http.Error(rw, "only admin can add members", http.StatusForbidden)
+		case errors.Is(err, ErrAlreadyMember):
+			http.Error(rw, "user is already a member", http.StatusConflict)
+		default:
+			log.Printf("add member: %v", err)
+			http.Error(rw, "internal error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	rw.WriteHeader(http.StatusNoContent)
 }

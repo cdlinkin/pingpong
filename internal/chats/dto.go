@@ -20,3 +20,7 @@ type chatResponse struct {
 	Type      string    `json:"type"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type addMemberRequest struct {
+	UserID int `json:"user_id"`
+}

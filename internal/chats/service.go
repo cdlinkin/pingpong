@@ -84,3 +84,42 @@ func (s *Service) ListUserChats(
 
 	return chats, nil
 }
+
+func (s *Service) AddMember(
+	ctx context.Context,
+	requesterID, chatID, newUserID int,
+) error {
+	role, err := s.repository.GetMemberRole(ctx, chatID, requesterID)
+	if err != nil {
+		if errors.Is(err, ErrNotMember) {
+			return fmt.Errorf(
+				"chat not found: %w",
+				ErrChatNotFound,
+			)
+		}
+		return fmt.Errorf(
+			"get member role: %w",
+			err,
+		)
+	}
+
+	if role != "admin" {
+		return fmt.Errorf(
+			"role invalid: %w",
+			ErrForbidden,
+		)
+	}
+
+	if err := s.repository.AddMember(
+		ctx,
+		chatID,
+		newUserID,
+	); err != nil {
+		return fmt.Errorf(
+			"add member: %w",
+			err,
+		)
+	}
+
+	return nil
+}

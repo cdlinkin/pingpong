@@ -188,3 +188,58 @@ func (r *Repository) ListUserChats(
 
 	return chats, nil
 }
+
+func (r *Repository) GetMemberRole(
+	ctx context.Context,
+	chatID, userID int,
+) (string, error) {
+	var role string
+	err := r.pool.QueryRow(
+		ctx,
+		`
+		SELECT role 
+		FROM chat_members 
+		WHERE chat_id = $1 AND user_id = $2
+		`,
+		chatID,
+		userID,
+	).Scan(&role)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", ErrNotMember
+		}
+		return "", fmt.Errorf(
+			"get member role: %w",
+			err,
+		)
+	}
+	return role, nil
+}
+
+func (r *Repository) AddMember(
+	ctx context.Context,
+	chatID, userID int,
+) error {
+	query := `
+	INSERT INTO chat_members (chat_id, user_id, role) 
+	VALUES ($1, $2, 'member')
+	`
+
+	_, err := r.pool.Exec(ctx, query, chatID, userID)
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			switch pgErr.Code {
+			case "23505":
+				return ErrAlreadyMember
+			case "23503":
+				return ErrUserNotFound
+			}
+		}
+		return fmt.Errorf(
+			"add member: %w",
+			err,
+		)
+	}
+	return nil
+}
