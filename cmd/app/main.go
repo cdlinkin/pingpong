@@ -78,22 +78,9 @@ func main() {
 	mux.Handle("POST /chats/direct", middleware.Auth(http.HandlerFunc(chatsHandler.CreateDirectChat)))
 	mux.Handle("GET /chats", middleware.Auth(http.HandlerFunc(chatsHandler.ListUserChats)))
 	mux.Handle("POST /chats/{id}/members", middleware.Auth(http.HandlerFunc(chatsHandler.AddMember)))
+	mux.Handle("DELETE /chats/{id}/members/{userID}", middleware.Auth(http.HandlerFunc(chatsHandler.RemoveMember)))
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("error to run server: %v", err)
 	}
 }
-
-// user A 36
-// {
-//     "login": "andy",
-//     "email": "andy@p.ru",
-//     "password": "qwe123dqrrwe2s"
-// }
-
-// user B 37
-// {
-//     "login": "ynda",
-//     "email": "ynda@p.ru",
-//     "password": "qwe123dqrrwe2s"
-// }

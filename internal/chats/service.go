@@ -123,3 +123,43 @@ func (s *Service) AddMember(
 
 	return nil
 }
+
+func (s *Service) RemoveMember(
+	ctx context.Context,
+	requesterID, chatID, targetID int,
+) error {
+	if targetID == requesterID {
+		return fmt.Errorf(
+			"cannot remove yourself: %w",
+			ErrInvalidInput,
+		)
+	}
+	role, err := s.repository.GetMemberRole(ctx, chatID, requesterID)
+	if err != nil {
+		if errors.Is(err, ErrNotMember) {
+			return fmt.Errorf(
+				"chat not found: %w",
+				ErrChatNotFound,
+			)
+		}
+		return fmt.Errorf(
+			"get member role: %w",
+			err,
+		)
+	}
+
+	if role != "admin" {
+		return fmt.Errorf(
+			"role invalid: %w",
+			ErrForbidden,
+		)
+	}
+
+	if err := s.repository.RemoveMember(ctx, chatID, targetID); err != nil {
+		return fmt.Errorf(
+			"remove member: %w",
+			err,
+		)
+	}
+	return nil
+}

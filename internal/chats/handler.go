@@ -189,3 +189,44 @@ func (h *Handler) AddMember(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusNoContent)
 }
+
+func (h *Handler) RemoveMember(rw http.ResponseWriter, r *http.Request) {
+	requesterID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(
+			rw,
+			"unauthorized",
+			http.StatusUnauthorized,
+		)
+		return
+	}
+	chatID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.Error(rw, "invalid chat id", http.StatusBadRequest)
+		return
+	}
+	targetID, err := strconv.Atoi(r.PathValue("userID"))
+	if err != nil {
+		http.Error(rw, "invalid user id", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.service.RemoveMember(r.Context(), requesterID, chatID, targetID); err != nil {
+		switch {
+		case errors.Is(err, ErrNotMember):
+			http.Error(rw, "member not found", http.StatusNotFound)
+		case errors.Is(err, ErrChatNotFound):
+			http.Error(rw, "chat not found", http.StatusNotFound)
+		case errors.Is(err, ErrForbidden):
+			http.Error(rw, "only admin can remove members", http.StatusForbidden)
+		case errors.Is(err, ErrInvalidInput):
+			http.Error(rw, "cannot remove yourself", http.StatusBadRequest)
+		default:
+			log.Printf("remove member: %v", err)
+			http.Error(rw, "internal error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	rw.WriteHeader(http.StatusNoContent)
+}

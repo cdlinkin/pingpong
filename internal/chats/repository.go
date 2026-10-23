@@ -243,3 +243,30 @@ func (r *Repository) AddMember(
 	}
 	return nil
 }
+
+func (r *Repository) RemoveMember(
+	ctx context.Context,
+	chatID, userID int,
+) error {
+	query := `
+	DELETE FROM chat_members 
+	WHERE chat_id = $1 AND user_id = $2
+	`
+
+	tag, err := r.pool.Exec(
+		ctx,
+		query,
+		chatID,
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"remove member: %w",
+			err,
+		)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotMember
+	}
+	return nil
+}
