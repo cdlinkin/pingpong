@@ -75,8 +75,23 @@ func main() {
 	mux.HandleFunc("/register", handler.Register)
 	mux.HandleFunc("/health", health)
 	mux.Handle("POST /chats/group", middleware.Auth(http.HandlerFunc(chatsHandler.CreateGroupChat)))
+	mux.Handle("POST /chats/direct", middleware.Auth(http.HandlerFunc(chatsHandler.CreateDirectChat)))
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("error to run server: %v", err)
 	}
 }
+
+// user A 36
+// {
+//     "login": "andy",
+//     "email": "andy@p.ru",
+//     "password": "qwe123dqrrwe2s"
+// }
+
+// user B 37
+// {
+//     "login": "ynda",
+//     "email": "ynda@p.ru",
+//     "password": "qwe123dqrrwe2s"
+// }

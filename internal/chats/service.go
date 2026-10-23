@@ -2,6 +2,7 @@ package chats
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -39,4 +40,32 @@ func (s *Service) CreateGroupChat(
 	}
 
 	return chatID, nil
+}
+
+func (s *Service) CreateDirectChat(
+	ctx context.Context,
+	creatorID, otherID int,
+) (int, bool, error) {
+	if creatorID == otherID {
+		return 0, false, fmt.Errorf(
+			"can’t create a chat with yourself: %w",
+			ErrInvalidInput,
+		)
+	}
+
+	chatID, err := s.repository.FindDirectChat(ctx, creatorID, otherID)
+	if err == nil {
+		return chatID, false, nil
+	}
+	if !errors.Is(err, ErrChatNotFound) {
+		return 0, false, fmt.Errorf("find direct chat: %w", err)
+	}
+	chatID, err = s.repository.CreateDirectChat(ctx, creatorID, otherID)
+	if err != nil {
+		return 0, false, fmt.Errorf(
+			"create direct chat: %w",
+			err,
+		)
+	}
+	return chatID, true, nil
 }

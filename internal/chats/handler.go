@@ -51,13 +51,60 @@ func (h *Handler) CreateGroupChat(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := createGroupResponse{
+	response := createChatResponse{
 		ID: id,
 	}
 
 	rw.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
 		log.Printf("create group chat: encode response: %v", err)
+		return
+	}
+}
+
+func (h *Handler) CreateDirectChat(rw http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(
+			rw,
+			"unauthorized",
+			http.StatusUnauthorized,
+		)
+		return
+	}
+	rw.Header().Set("Content-Type", "application/json")
+
+	var req createDirectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(rw, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	id, created, err := h.service.CreateDirectChat(r.Context(), userID, req.UserID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrUserNotFound):
+			http.Error(rw, "user not found", http.StatusNotFound)
+		case errors.Is(err, ErrInvalidInput):
+			http.Error(rw, err.Error(), http.StatusBadRequest)
+		default:
+			log.Printf("create direct chat: %v", err)
+			http.Error(rw, "internal error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	response := createChatResponse{
+		ID: id,
+	}
+
+	status := http.StatusOK
+	if created {
+		status = http.StatusCreated
+	}
+	rw.WriteHeader(status)
+	if err := json.NewEncoder(rw).Encode(response); err != nil {
+		log.Printf("direct chat: encode response: %v", err)
 		return
 	}
 }
