@@ -55,11 +55,17 @@ func (r *Repository) CreateGroupChat(
 		chatID, creatorID,
 	)
 	if err != nil {
-		return 0, fmt.Errorf("insert chat member: %w", err)
+		return 0, fmt.Errorf(
+			"insert chat member: %w",
+			err,
+		)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return 0, fmt.Errorf("commit tx: %w", err)
+		return 0, fmt.Errorf(
+			"commit tx: %w",
+			err,
+		)
 	}
 
 	return chatID, nil
@@ -136,7 +142,10 @@ func (r *Repository) FindDirectChat(
 		if errors.Is(err, pgx.ErrNoRows) {
 			return 0, ErrChatNotFound
 		}
-		return 0, fmt.Errorf("find direct chat: %w", err)
+		return 0, fmt.Errorf(
+			"find direct chat: %w",
+			err,
+		)
 	}
 
 	return chatID, nil

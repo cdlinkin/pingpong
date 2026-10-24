@@ -36,7 +36,11 @@ func (h *Handler) CreateGroupChat(rw http.ResponseWriter, r *http.Request) {
 
 	var req createGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(rw, "invalid JSON", http.StatusBadRequest)
+		http.Error(
+			rw,
+			"invalid JSON",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
@@ -44,10 +48,18 @@ func (h *Handler) CreateGroupChat(rw http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidInput):
-			http.Error(rw, err.Error(), http.StatusBadRequest)
+			http.Error(
+				rw,
+				err.Error(),
+				http.StatusBadRequest,
+			)
 		default:
 			log.Printf("create group chat: %v", err)
-			http.Error(rw, "internal error", http.StatusInternalServerError)
+			http.Error(
+				rw,
+				"internal error",
+				http.StatusInternalServerError,
+			)
 		}
 		return
 	}
@@ -77,7 +89,11 @@ func (h *Handler) CreateDirectChat(rw http.ResponseWriter, r *http.Request) {
 
 	var req createDirectRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(rw, "invalid JSON", http.StatusBadRequest)
+		http.Error(
+			rw,
+			"invalid JSON",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
@@ -125,7 +141,11 @@ func (h *Handler) ListUserChats(rw http.ResponseWriter, r *http.Request) {
 	chats, err := h.service.ListUserChats(r.Context(), userID)
 	if err != nil {
 		log.Printf("list user chats: %v", err)
-		http.Error(rw, "internal error", http.StatusInternalServerError)
+		http.Error(
+			rw,
+			"internal error",
+			http.StatusInternalServerError,
+		)
 		return
 	}
 
@@ -160,13 +180,21 @@ func (h *Handler) AddMember(rw http.ResponseWriter, r *http.Request) {
 	}
 	chatID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(rw, "invalid chat id", http.StatusBadRequest)
+		http.Error(
+			rw,
+			"invalid chat id",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
 	var req addMemberRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(rw, "invalid JSON", http.StatusBadRequest)
+		http.Error(
+			rw,
+			"invalid JSON",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
@@ -202,12 +230,20 @@ func (h *Handler) RemoveMember(rw http.ResponseWriter, r *http.Request) {
 	}
 	chatID, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.Error(rw, "invalid chat id", http.StatusBadRequest)
+		http.Error(
+			rw,
+			"invalid chat id",
+			http.StatusBadRequest,
+		)
 		return
 	}
 	targetID, err := strconv.Atoi(r.PathValue("userID"))
 	if err != nil {
-		http.Error(rw, "invalid user id", http.StatusBadRequest)
+		http.Error(
+			rw,
+			"invalid user id",
+			http.StatusBadRequest,
+		)
 		return
 	}
 
