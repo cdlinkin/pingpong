@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/cdlinkin/pingpong/internal/auth"
+	"github.com/cdlinkin/pingpong/internal/chats"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -63,12 +64,21 @@ func main() {
 	handler := auth.NewHandler(service)
 	middleware := auth.NewMiddleware([]byte(jwtSecret))
 
+	chatsRepo := chats.NewRepository(pool)
+	chatsService := chats.NewService(chatsRepo)
+	chatsHandler := chats.NewHandler(chatsService)
+
 	mux := http.NewServeMux()
 
 	mux.Handle("GET /me", middleware.Auth(http.HandlerFunc(handler.Me)))
 	mux.HandleFunc("/login", handler.Login)
 	mux.HandleFunc("/register", handler.Register)
 	mux.HandleFunc("/health", health)
+	mux.Handle("POST /chats/group", middleware.Auth(http.HandlerFunc(chatsHandler.CreateGroupChat)))
+	mux.Handle("POST /chats/direct", middleware.Auth(http.HandlerFunc(chatsHandler.CreateDirectChat)))
+	mux.Handle("GET /chats", middleware.Auth(http.HandlerFunc(chatsHandler.ListUserChats)))
+	mux.Handle("POST /chats/{id}/members", middleware.Auth(http.HandlerFunc(chatsHandler.AddMember)))
+	mux.Handle("DELETE /chats/{id}/members/{userID}", middleware.Auth(http.HandlerFunc(chatsHandler.RemoveMember)))
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("error to run server: %v", err)
