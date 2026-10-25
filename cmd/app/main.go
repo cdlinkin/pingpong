@@ -9,6 +9,7 @@ import (
 
 	"github.com/cdlinkin/pingpong/internal/auth"
 	"github.com/cdlinkin/pingpong/internal/chats"
+	"github.com/cdlinkin/pingpong/internal/messages"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
@@ -68,6 +69,10 @@ func main() {
 	chatsService := chats.NewService(chatsRepo)
 	chatsHandler := chats.NewHandler(chatsService)
 
+	msgRepo := messages.NewRepository(pool)
+	msgService := messages.NewService(msgRepo)
+	msgHandler := messages.NewHandler(msgService)
+
 	mux := http.NewServeMux()
 
 	mux.Handle("GET /me", middleware.Auth(http.HandlerFunc(handler.Me)))
@@ -79,6 +84,7 @@ func main() {
 	mux.Handle("GET /chats", middleware.Auth(http.HandlerFunc(chatsHandler.ListUserChats)))
 	mux.Handle("POST /chats/{id}/members", middleware.Auth(http.HandlerFunc(chatsHandler.AddMember)))
 	mux.Handle("DELETE /chats/{id}/members/{userID}", middleware.Auth(http.HandlerFunc(chatsHandler.RemoveMember)))
+	mux.Handle("POST /chats/{id}/messages", middleware.Auth(http.HandlerFunc(msgHandler.SendMessage)))
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("error to run server: %v", err)
