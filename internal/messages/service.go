@@ -93,3 +93,40 @@ func (s *Service) ListMessage(
 
 	return messages, nil
 }
+
+func (s *Service) SearchMessages(
+	ctx context.Context,
+	userID, chatID int,
+	query string,
+) ([]MessageModel, error) {
+	query, err := validateQuery(query)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"validate query: %w",
+			err,
+		)
+	}
+	isMember, err := s.repository.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"is member: %w",
+			err,
+		)
+	}
+	if !isMember {
+		return nil, fmt.Errorf(
+			"user not in chat: %w",
+			ErrChatNotFound,
+		)
+	}
+
+	messages, err := s.repository.SearchMessages(ctx, chatID, query)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"search messages: %w",
+			err,
+		)
+	}
+
+	return messages, nil
+}

@@ -19,3 +19,14 @@ func validateMsg(msg string) (string, error) {
 
 	return msg, nil
 }
+
+func validateQuery(q string) (string, error) {
+	q = strings.TrimSpace(q)
+	if utf8.RuneCountInString(q) == 0 || utf8.RuneCountInString(q) > 100 {
+		return "", fmt.Errorf(
+			"query: %w",
+			ErrInvalidInput,
+		)
+	}
+	return q, nil
+}
