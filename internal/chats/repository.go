@@ -39,7 +39,7 @@ func (r *Repository) CreateGroupChat(
 		ctx,
 		`INSERT INTO chats (title, type) 
 		VALUES ($1, 'group') 
-		RETURNING id`,
+		RETURNING id;`,
 		title,
 	).Scan(&chatID)
 	if err != nil {
@@ -51,7 +51,7 @@ func (r *Repository) CreateGroupChat(
 
 	_, err = tx.Exec(ctx,
 		`INSERT INTO chat_members (chat_id, user_id, role)
-		VALUES ($1, $2, 'admin')`,
+		VALUES ($1, $2, 'admin');`,
 		chatID, creatorID,
 	)
 	if err != nil {
@@ -88,7 +88,7 @@ func (r *Repository) CreateDirectChat(
 	err = tx.QueryRow(
 		ctx,
 		`INSERT INTO chats (type)
-		VALUES ('direct') RETURNING id`,
+		VALUES ('direct') RETURNING id;`,
 	).Scan(&chatID)
 	if err != nil {
 		return 0, fmt.Errorf(
@@ -100,7 +100,7 @@ func (r *Repository) CreateDirectChat(
 	_, err = tx.Exec(
 		ctx,
 		`INSERT INTO chat_members (chat_id, user_id, role)
-		VALUES ($1, $2, 'member'), ($1, $3, 'member')`,
+		VALUES ($1, $2, 'member'), ($1, $3, 'member');`,
 		chatID, userA, userB,
 	)
 	if err != nil {
@@ -135,7 +135,7 @@ func (r *Repository) FindDirectChat(
 		FROM chats c
 		JOIN chat_members a ON a.chat_id = c.id AND a.user_id = $1
 		JOIN chat_members b ON b.chat_id = c.id AND b.user_id = $2
-		WHERE c.type = 'direct'`,
+		WHERE c.type = 'direct';`,
 		userA, userB,
 	).Scan(&chatID)
 	if err != nil {
@@ -160,7 +160,7 @@ func (r *Repository) ListUserChats(
 	FROM chats c
 	JOIN chat_members m ON m.chat_id = c.id
 	WHERE m.user_id = $1
-	ORDER BY c.created_at DESC
+	ORDER BY c.created_at DESC;
 	`
 
 	rows, err := r.pool.Query(ctx, query, userID)
@@ -208,7 +208,7 @@ func (r *Repository) GetMemberRole(
 		`
 		SELECT role 
 		FROM chat_members 
-		WHERE chat_id = $1 AND user_id = $2
+		WHERE chat_id = $1 AND user_id = $2;
 		`,
 		chatID,
 		userID,
@@ -231,7 +231,7 @@ func (r *Repository) AddMember(
 ) error {
 	query := `
 	INSERT INTO chat_members (chat_id, user_id, role) 
-	VALUES ($1, $2, 'member')
+	VALUES ($1, $2, 'member');
 	`
 
 	_, err := r.pool.Exec(ctx, query, chatID, userID)
@@ -259,7 +259,7 @@ func (r *Repository) RemoveMember(
 ) error {
 	query := `
 	DELETE FROM chat_members 
-	WHERE chat_id = $1 AND user_id = $2
+	WHERE chat_id = $1 AND user_id = $2;
 	`
 
 	tag, err := r.pool.Exec(
