@@ -85,6 +85,7 @@ func main() {
 	mux.Handle("POST /chats/{id}/members", middleware.Auth(http.HandlerFunc(chatsHandler.AddMember)))
 	mux.Handle("DELETE /chats/{id}/members/{userID}", middleware.Auth(http.HandlerFunc(chatsHandler.RemoveMember)))
 	mux.Handle("POST /chats/{id}/messages", middleware.Auth(http.HandlerFunc(msgHandler.SendMessage)))
+	mux.Handle("GET /chats/{id}/messages", middleware.Auth(http.HandlerFunc(msgHandler.ListMessage)))
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("error to run server: %v", err)
