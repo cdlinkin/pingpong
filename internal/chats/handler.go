@@ -22,6 +22,20 @@ func NewHandler(
 	}
 }
 
+// CreateGroupChat godoc
+//
+//	@Summary		Создать групповой чат
+//	@Description	Создаёт группу. Создатель автоматически становится участником с ролью `admin`.
+//	@Tags			chats
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			request	body		createGroupRequest	true	"Название группы (1–50 символов)"
+//	@Success		201		{object}	createChatResponse	"Группа создана"
+//	@Failure		400		{string}	string				"Невалидный JSON или название"
+//	@Failure		401		{string}	string				"invalid token"
+//	@Failure		500		{string}	string				"internal error"
+//	@Router			/chats/group [post]
 func (h *Handler) CreateGroupChat(rw http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -75,6 +89,22 @@ func (h *Handler) CreateGroupChat(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CreateDirectChat godoc
+//
+//	@Summary		Личный чат: найти или создать
+//	@Description	Если личный чат с этим пользователем уже есть, возвращает его id со статусом 200. Иначе создаёт новый и отвечает 201. Чат с самим собой создать нельзя.
+//	@Tags			chats
+//	@Accept			json
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			request	body		createDirectRequest	true	"id собеседника"
+//	@Success		200		{object}	createChatResponse	"Чат уже существовал"
+//	@Success		201		{object}	createChatResponse	"Чат создан"
+//	@Failure		400		{string}	string				"Невалидный JSON или чат с самим собой"
+//	@Failure		401		{string}	string				"invalid token"
+//	@Failure		404		{string}	string				"user not found"
+//	@Failure		500		{string}	string				"internal error"
+//	@Router			/chats/direct [post]
 func (h *Handler) CreateDirectChat(rw http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -126,6 +156,17 @@ func (h *Handler) CreateDirectChat(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// ListUserChats godoc
+//
+//	@Summary		Мои чаты
+//	@Description	Список чатов, в которых состоит текущий пользователь. У личных чатов `title` равен null.
+//	@Tags			chats
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Success		200	{array}		chatResponse	"Список чатов (может быть пустым)"
+//	@Failure		401	{string}	string			"invalid token"
+//	@Failure		500	{string}	string			"internal error"
+//	@Router			/chats [get]
 func (h *Handler) ListUserChats(rw http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -168,6 +209,23 @@ func (h *Handler) ListUserChats(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// AddMember godoc
+//
+//	@Summary		Добавить участника
+//	@Description	Добавляет пользователя в групповой чат. Доступно только админу чата. Если вы не участник чата, ответ 404.
+//	@Tags			chats
+//	@Accept			json
+//	@Security		BearerAuth
+//	@Param			id		path	int					true	"ID чата"
+//	@Param			request	body	addMemberRequest	true	"id добавляемого пользователя"
+//	@Success		204		"Участник добавлен"
+//	@Failure		400		{string}	string	"Невалидный id чата или JSON"
+//	@Failure		401		{string}	string	"invalid token"
+//	@Failure		403		{string}	string	"only admin can add members"
+//	@Failure		404		{string}	string	"chat not found / user not found"
+//	@Failure		409		{string}	string	"user is already a member"
+//	@Failure		500		{string}	string	"internal error"
+//	@Router			/chats/{id}/members [post]
 func (h *Handler) AddMember(rw http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -218,6 +276,21 @@ func (h *Handler) AddMember(rw http.ResponseWriter, r *http.Request) {
 	rw.WriteHeader(http.StatusNoContent)
 }
 
+// RemoveMember godoc
+//
+//	@Summary		Удалить участника
+//	@Description	Удаляет пользователя из чата. Доступно только админу чата, удалить самого себя нельзя.
+//	@Tags			chats
+//	@Security		BearerAuth
+//	@Param			id		path	int	true	"ID чата"
+//	@Param			userID	path	int	true	"ID удаляемого пользователя"
+//	@Success		204		"Участник удалён"
+//	@Failure		400		{string}	string	"Невалидный id или cannot remove yourself"
+//	@Failure		401		{string}	string	"invalid token"
+//	@Failure		403		{string}	string	"only admin can remove members"
+//	@Failure		404		{string}	string	"chat not found / member not found"
+//	@Failure		500		{string}	string	"internal error"
+//	@Router			/chats/{id}/members/{userID} [delete]
 func (h *Handler) RemoveMember(rw http.ResponseWriter, r *http.Request) {
 	requesterID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
