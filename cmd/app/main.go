@@ -21,6 +21,10 @@ type Response struct {
 	Status string `json:"status" example:"OK"`
 } //@name HealthResponse
 
+func index(rw http.ResponseWriter, r *http.Request) {
+	http.ServeFile(rw, r, "web/index.html")
+}
+
 // health godoc
 //
 //	@Summary		Проверка состояния
@@ -133,6 +137,7 @@ func main() {
 	mux.Handle("GET /chats/{id}/messages", middleware.Auth(http.HandlerFunc(msgHandler.ListMessage)))
 	mux.Handle("GET /chats/{id}/messages/search", middleware.Auth(http.HandlerFunc(msgHandler.SearchMessages)))
 	mux.HandleFunc("GET /ws", wsHandler.ServeWS)
+	mux.HandleFunc("GET /{$}", index)
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("error to run server: %v", err)
 	}
