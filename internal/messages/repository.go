@@ -170,3 +170,45 @@ func (r *Repository) SearchMessages(
 
 	return messages, nil
 }
+
+func (r *Repository) ListMemberIDs(
+	ctx context.Context,
+	chatID int,
+) ([]int, error) {
+	query := `
+	SELECT user_id
+	FROM chat_members
+	WHERE chat_id = $1;
+	`
+
+	rows, err := r.pool.Query(ctx, query, chatID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list member ids: %w",
+			err,
+		)
+	}
+	defer rows.Close()
+
+	var userID []int
+	for rows.Next() {
+		var uid int
+		if err := rows.Scan(
+			&uid,
+		); err != nil {
+			return nil, fmt.Errorf(
+				"scan member id: %w",
+				err,
+			)
+		}
+		userID = append(userID, uid)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"rows: %w",
+			err,
+		)
+	}
+
+	return userID, nil
+}

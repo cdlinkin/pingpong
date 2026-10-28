@@ -130,3 +130,18 @@ func (s *Service) SearchMessages(
 
 	return messages, nil
 }
+
+func (s *Service) ListMemberIDs(
+	ctx context.Context,
+	chatID int,
+) ([]int, error) {
+	usersID, err := s.repository.ListMemberIDs(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list member ids: %w",
+			err,
+		)
+	}
+
+	return usersID, nil
+}
