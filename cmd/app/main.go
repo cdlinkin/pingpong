@@ -75,7 +75,7 @@ func main() {
 	msgHandler := messages.NewHandler(msgService)
 
 	wsHub := ws.NewHub()
-	wsHandler := ws.NewHandler([]byte(jwtSecret), wsHub)
+	wsHandler := ws.NewHandler([]byte(jwtSecret), wsHub, msgService)
 
 	mux := http.NewServeMux()
 
