@@ -7,22 +7,32 @@ import (
 	"net/http"
 	"os"
 
+	_ "github.com/cdlinkin/pingpong/docs"
 	"github.com/cdlinkin/pingpong/internal/auth"
 	"github.com/cdlinkin/pingpong/internal/chats"
 	"github.com/cdlinkin/pingpong/internal/messages"
 	"github.com/cdlinkin/pingpong/internal/ws"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
 )
 
 type Response struct {
-	Status string `json:"status"`
-}
+	Status string `json:"status" example:"OK"`
+} //@name HealthResponse
 
 func index(rw http.ResponseWriter, r *http.Request) {
 	http.ServeFile(rw, r, "web/index.html")
 }
 
+// health godoc
+//
+//	@Summary		Проверка состояния
+//	@Description	Отвечает `{"status":"OK"}`, если сервер запущен.
+//	@Tags			system
+//	@Produce		json
+//	@Success		200	{object}	Response	"Сервер работает"
+//	@Router			/health [get]
 func health(rw http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(rw, "method not allowed", http.StatusMethodNotAllowed)
@@ -42,6 +52,32 @@ func health(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
+//	@title			PingPong API
+//	@version		1.0
+//	@description	REST API веб-мессенджера PingPong: регистрация и JWT-авторизация, личные и групповые чаты, сообщения с курсорной пагинацией и поиском, доставка в реальном времени через WebSocket.
+//	@description
+//	@description	**Как авторизоваться:** выполните `POST /login`, нажмите **Authorize** и вставьте `Bearer <token>`.
+//	@description
+//	@description	**Ошибки** возвращаются обычным текстом (`text/plain`), например `chat not found`. Если вы не участник чата, API отвечает 404, чтобы не раскрывать, что чат существует.
+//	@host			localhost:8080
+//	@BasePath		/
+//	@schemes		http
+
+//	@tag.name			system
+//	@tag.description	Служебные эндпоинты
+//	@tag.name			auth
+//	@tag.description	Регистрация, вход и профиль
+//	@tag.name			chats
+//	@tag.description	Личные и групповые чаты, участники
+//	@tag.name			messages
+//	@tag.description	Отправка, история и поиск сообщений
+//	@tag.name			realtime
+//	@tag.description	WebSocket
+
+// @securityDefinitions.apikey	BearerAuth
+// @in							header
+// @name						Authorization
+// @description				JWT из POST /login. Формат: `Bearer <token>`
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Fatalf("godotenv load: %v", err)
@@ -82,6 +118,11 @@ func main() {
 	wsHandler := ws.NewHandler([]byte(jwtSecret), wsHub, msgService)
 
 	mux := http.NewServeMux()
+
+	mux.Handle("GET /swagger/", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+		httpSwagger.PersistAuthorization(true),
+	))
 
 	mux.Handle("GET /me", middleware.Auth(http.HandlerFunc(handler.Me)))
 	mux.HandleFunc("/login", handler.Login)

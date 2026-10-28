@@ -17,6 +17,20 @@ func NewHandler(service *Service) *Handler {
 	}
 }
 
+// Register godoc
+//
+//	@Summary		Регистрация
+//	@Description	Создаёт нового пользователя. Логин 3–25 символов, корректный email, пароль от 8 до 72 байт (ограничение bcrypt).
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		registerRequest		true	"Данные нового пользователя"
+//	@Success		201		{object}	registerResponse	"Пользователь создан"
+//	@Failure		400		{string}	string				"Невалидный JSON или данные"
+//	@Failure		405		{string}	string				"method not allowed"
+//	@Failure		409		{string}	string				"user already exists"
+//	@Failure		500		{string}	string				"internal error"
+//	@Router			/register [post]
 func (h *Handler) Register(rw http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(rw, "method not allowed", http.StatusMethodNotAllowed)
@@ -56,6 +70,20 @@ func (h *Handler) Register(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Login godoc
+//
+//	@Summary		Вход
+//	@Description	Проверяет email и пароль и выдаёт JWT (HS256, живёт 24 часа). Токен передаётся в заголовке `Authorization: Bearer <token>`.
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		loginRequest	true	"Email и пароль"
+//	@Success		200		{object}	loginResponse	"JWT"
+//	@Failure		400		{string}	string			"Невалидный JSON или данные"
+//	@Failure		401		{string}	string			"invalid email or password"
+//	@Failure		405		{string}	string			"method not allowed"
+//	@Failure		500		{string}	string			"internal error"
+//	@Router			/login [post]
 func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(rw, "method not allowed", http.StatusMethodNotAllowed)
@@ -95,6 +123,18 @@ func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Me godoc
+//
+//	@Summary		Текущий пользователь
+//	@Description	Возвращает профиль владельца токена.
+//	@Tags			auth
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Success		200	{object}	meResponse	"Профиль"
+//	@Failure		401	{string}	string		"invalid token"
+//	@Failure		404	{string}	string		"user not found"
+//	@Failure		500	{string}	string		"internal error"
+//	@Router			/me [get]
 func (h *Handler) Me(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Content-Type", "application/json")
 
