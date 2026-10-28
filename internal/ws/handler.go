@@ -29,6 +29,24 @@ func NewHandler(
 	}
 }
 
+// ServeWS godoc
+//
+//	@Summary		WebSocket: сообщения в реальном времени
+//	@Description	Открывает WebSocket. Swagger UI не умеет подключаться к WebSocket: проверяйте в Postman (New → WebSocket) или через фронтенд.
+//	@Description
+//	@Description	**Подключение:** `ws://localhost:8080/ws?token=<JWT>`. Токен передаётся в query, потому что браузер не может ставить заголовки при открытии WebSocket.
+//	@Description
+//	@Description	**Клиент → сервер:** `{"chat_id": 13, "message": "Привет!"}` (модель WSIncomingMessage).
+//	@Description
+//	@Description	**Сервер → клиент:** сохранённое сообщение (модель WSOutgoingMessage) рассылается всем участникам чата, которые сейчас онлайн, включая отправителя. Для него это подтверждение доставки.
+//	@Description
+//	@Description	**Ошибки** приходят только отправителю: `{"error": "bad json"}`, `{"error": "invalid message"}`, `{"error": "chat not found"}`, `{"error": "internal error"}`.
+//	@Tags			realtime
+//	@Param			token	query		string			true	"JWT из /login"
+//	@Param			message	body		incomingMessage	false	"Формат сообщения клиента (отправляется по WebSocket, не в теле HTTP)"
+//	@Success		101		{object}	outgoingMessage	"Соединение переключено на WebSocket; так выглядят входящие сообщения"
+//	@Failure		401		{string}	string			"invalid token"
+//	@Router			/ws [get]
 func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 	token := r.URL.Query().Get("token")
 	id, err := auth.ParseToken(token, h.secret)

@@ -1,0 +1,688 @@
+basePath: /
+definitions:
+  AddMemberRequest:
+    properties:
+      user_id:
+        example: 40
+        type: integer
+    type: object
+  Chat:
+    properties:
+      created_at:
+        example: "2026-10-22T12:00:00Z"
+        type: string
+      id:
+        example: 13
+        type: integer
+      title:
+        example: Команда проекта
+        type: string
+        x-nullable: true
+      type:
+        enum:
+        - direct
+        - group
+        example: group
+        type: string
+    type: object
+  CreateChatResponse:
+    properties:
+      id:
+        example: 13
+        type: integer
+    type: object
+  CreateDirectRequest:
+    properties:
+      user_id:
+        example: 39
+        type: integer
+    type: object
+  CreateGroupRequest:
+    properties:
+      title:
+        example: Команда проекта
+        maxLength: 50
+        minLength: 1
+        type: string
+    type: object
+  HealthResponse:
+    properties:
+      status:
+        example: OK
+        type: string
+    type: object
+  LoginRequest:
+    properties:
+      email:
+        example: kuroame@example.com
+        type: string
+      password:
+        example: supersecret
+        type: string
+    type: object
+  LoginResponse:
+    properties:
+      token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    type: object
+  Message:
+    properties:
+      chat_id:
+        example: 13
+        type: integer
+      created_at:
+        example: "2026-10-28T18:34:54Z"
+        type: string
+      id:
+        example: 120
+        type: integer
+      message:
+        example: Привет!
+        type: string
+      user_id:
+        example: 38
+        type: integer
+    type: object
+  RegisterRequest:
+    properties:
+      email:
+        example: kuroame@example.com
+        maxLength: 250
+        type: string
+      login:
+        example: kuroame
+        maxLength: 25
+        minLength: 3
+        type: string
+      password:
+        example: supersecret
+        maxLength: 72
+        minLength: 8
+        type: string
+    type: object
+  RegisterResponse:
+    properties:
+      id:
+        example: 38
+        type: integer
+    type: object
+  SendMessageRequest:
+    properties:
+      message:
+        example: Привет!
+        maxLength: 500
+        minLength: 1
+        type: string
+    type: object
+  User:
+    properties:
+      created_at:
+        example: "2026-10-20T18:30:00Z"
+        type: string
+      email:
+        example: kuroame@example.com
+        type: string
+      id:
+        example: 38
+        type: integer
+      login:
+        example: kuroame
+        type: string
+    type: object
+  WSIncomingMessage:
+    properties:
+      chat_id:
+        example: 13
+        type: integer
+      message:
+        example: Привет!
+        type: string
+    type: object
+  WSOutgoingMessage:
+    properties:
+      chat_id:
+        example: 13
+        type: integer
+      created_at:
+        example: "2026-10-28T18:34:54Z"
+        type: string
+      id:
+        example: 120
+        type: integer
+      message:
+        example: Привет!
+        type: string
+      user_id:
+        example: 38
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: |-
+    REST API веб-мессенджера PingPong: регистрация и JWT-авторизация, личные и групповые чаты, сообщения с курсорной пагинацией и поиском, доставка в реальном времени через WebSocket.
+
+    **Как авторизоваться:** выполните `POST /login`, нажмите **Authorize** и вставьте `Bearer <token>`.
+
+    **Ошибки** возвращаются обычным текстом (`text/plain`), например `chat not found`. Если вы не участник чата, API отвечает 404, чтобы не раскрывать, что чат существует.
+  title: PingPong API
+  version: "1.0"
+paths:
+  /chats:
+    get:
+      description: Список чатов, в которых состоит текущий пользователь. У личных
+        чатов `title` равен null.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Список чатов (может быть пустым)
+          schema:
+            items:
+              $ref: '#/definitions/Chat'
+            type: array
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Мои чаты
+      tags:
+      - chats
+  /chats/{id}/members:
+    post:
+      consumes:
+      - application/json
+      description: Добавляет пользователя в групповой чат. Доступно только админу
+        чата. Если вы не участник чата, ответ 404.
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: id добавляемого пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/AddMemberRequest'
+      responses:
+        "204":
+          description: Участник добавлен
+        "400":
+          description: Невалидный id чата или JSON
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "403":
+          description: only admin can add members
+          schema:
+            type: string
+        "404":
+          description: chat not found / user not found
+          schema:
+            type: string
+        "409":
+          description: user is already a member
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Добавить участника
+      tags:
+      - chats
+  /chats/{id}/members/{userID}:
+    delete:
+      description: Удаляет пользователя из чата. Доступно только админу чата, удалить
+        самого себя нельзя.
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ID удаляемого пользователя
+        in: path
+        name: userID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: Участник удалён
+        "400":
+          description: Невалидный id или cannot remove yourself
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "403":
+          description: only admin can remove members
+          schema:
+            type: string
+        "404":
+          description: chat not found / member not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Удалить участника
+      tags:
+      - chats
+  /chats/{id}/messages:
+    get:
+      description: Курсорная пагинация от новых к старым. Для следующей страницы передайте
+        в `before` id самого старого сообщения из текущей.
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Вернуть сообщения с id меньше этого
+        in: query
+        name: before
+        type: integer
+      - description: 'Размер страницы: по умолчанию 50, максимум 100'
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Страница сообщений
+          schema:
+            items:
+              $ref: '#/definitions/Message'
+            type: array
+        "400":
+          description: invalid before / invalid limit
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: История сообщений
+      tags:
+      - messages
+    post:
+      consumes:
+      - application/json
+      description: Сохраняет сообщение в чате. Отправитель должен быть участником
+        чата. Для доставки собеседникам в реальном времени используйте WebSocket `/ws`.
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Текст сообщения (1–500 символов)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/SendMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Сообщение сохранено
+          schema:
+            $ref: '#/definitions/Message'
+        "400":
+          description: message must be 1-500 symbols
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Отправить сообщение (HTTP)
+      tags:
+      - messages
+  /chats/{id}/messages/search:
+    get:
+      description: Ищет подстроку в сообщениях чата без учёта регистра. Возвращает
+        до 50 последних совпадений.
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Текст для поиска (1–100 символов)
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Найденные сообщения
+          schema:
+            items:
+              $ref: '#/definitions/Message'
+            type: array
+        "400":
+          description: query must be 1-100 symbols
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Поиск по сообщениям
+      tags:
+      - messages
+  /chats/direct:
+    post:
+      consumes:
+      - application/json
+      description: Если личный чат с этим пользователем уже есть, возвращает его id
+        со статусом 200. Иначе создаёт новый и отвечает 201. Чат с самим собой создать
+        нельзя.
+      parameters:
+      - description: id собеседника
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CreateDirectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Чат уже существовал
+          schema:
+            $ref: '#/definitions/CreateChatResponse'
+        "201":
+          description: Чат создан
+          schema:
+            $ref: '#/definitions/CreateChatResponse'
+        "400":
+          description: Невалидный JSON или чат с самим собой
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: user not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: 'Личный чат: найти или создать'
+      tags:
+      - chats
+  /chats/group:
+    post:
+      consumes:
+      - application/json
+      description: Создаёт группу. Создатель автоматически становится участником с
+        ролью `admin`.
+      parameters:
+      - description: Название группы (1–50 символов)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/CreateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Группа создана
+          schema:
+            $ref: '#/definitions/CreateChatResponse'
+        "400":
+          description: Невалидный JSON или название
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Создать групповой чат
+      tags:
+      - chats
+  /health:
+    get:
+      description: Отвечает `{"status":"OK"}`, если сервер запущен.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Сервер работает
+          schema:
+            $ref: '#/definitions/HealthResponse'
+      summary: Проверка состояния
+      tags:
+      - system
+  /login:
+    post:
+      consumes:
+      - application/json
+      description: 'Проверяет email и пароль и выдаёт JWT (HS256, живёт 24 часа).
+        Токен передаётся в заголовке `Authorization: Bearer <token>`.'
+      parameters:
+      - description: Email и пароль
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: JWT
+          schema:
+            $ref: '#/definitions/LoginResponse'
+        "400":
+          description: Невалидный JSON или данные
+          schema:
+            type: string
+        "401":
+          description: invalid email or password
+          schema:
+            type: string
+        "405":
+          description: method not allowed
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      summary: Вход
+      tags:
+      - auth
+  /me:
+    get:
+      description: Возвращает профиль владельца токена.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Профиль
+          schema:
+            $ref: '#/definitions/User'
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: user not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Текущий пользователь
+      tags:
+      - auth
+  /register:
+    post:
+      consumes:
+      - application/json
+      description: Создаёт нового пользователя. Логин 3–25 символов, корректный email,
+        пароль от 8 до 72 байт (ограничение bcrypt).
+      parameters:
+      - description: Данные нового пользователя
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Пользователь создан
+          schema:
+            $ref: '#/definitions/RegisterResponse'
+        "400":
+          description: Невалидный JSON или данные
+          schema:
+            type: string
+        "405":
+          description: method not allowed
+          schema:
+            type: string
+        "409":
+          description: user already exists
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      summary: Регистрация
+      tags:
+      - auth
+  /ws:
+    get:
+      description: |-
+        Открывает WebSocket. Swagger UI не умеет подключаться к WebSocket: проверяйте в Postman (New → WebSocket) или через фронтенд.
+
+        **Подключение:** `ws://localhost:8080/ws?token=<JWT>`. Токен передаётся в query, потому что браузер не может ставить заголовки при открытии WebSocket.
+
+        **Клиент → сервер:** `{"chat_id": 13, "message": "Привет!"}` (модель WSIncomingMessage).
+
+        **Сервер → клиент:** сохранённое сообщение (модель WSOutgoingMessage) рассылается всем участникам чата, которые сейчас онлайн, включая отправителя. Для него это подтверждение доставки.
+
+        **Ошибки** приходят только отправителю: `{"error": "bad json"}`, `{"error": "invalid message"}`, `{"error": "chat not found"}`, `{"error": "internal error"}`.
+      parameters:
+      - description: JWT из /login
+        in: query
+        name: token
+        required: true
+        type: string
+      - description: Формат сообщения клиента (отправляется по WebSocket, не в теле
+          HTTP)
+        in: body
+        name: message
+        schema:
+          $ref: '#/definitions/WSIncomingMessage'
+      responses:
+        "101":
+          description: Соединение переключено на WebSocket; так выглядят входящие
+            сообщения
+          schema:
+            $ref: '#/definitions/WSOutgoingMessage'
+        "401":
+          description: invalid token
+          schema:
+            type: string
+      summary: 'WebSocket: сообщения в реальном времени'
+      tags:
+      - realtime
+schemes:
+- http
+securityDefinitions:
+  BearerAuth:
+    description: 'JWT из POST /login. Формат: `Bearer <token>`'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
+tags:
+- description: Служебные эндпоинты
+  name: system
+- description: Регистрация, вход и профиль
+  name: auth
+- description: Личные и групповые чаты, участники
+  name: chats
+- description: Отправка, история и поиск сообщений
+  name: messages
+- description: WebSocket
+  name: realtime
