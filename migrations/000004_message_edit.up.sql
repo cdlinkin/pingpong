@@ -1,0 +1,5 @@
+ALTER TABLE messages 
+ADD COLUMN edited_at   TIMESTAMPTZ;
+
+ALTER TABLE messages 
+ADD COLUMN deleted_at  TIMESTAMPTZ;

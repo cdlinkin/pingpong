@@ -8,4 +8,6 @@ type MessageModel struct {
 	UserID    int
 	Message   string
 	CreatedAt time.Time
+	EditedAt  *time.Time
+	DeletedAt *time.Time
 }

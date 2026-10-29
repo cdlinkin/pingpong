@@ -2,8 +2,10 @@ package messages
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -79,7 +81,11 @@ func (r *Repository) ListMessage(
 	beforeID, limit int,
 ) ([]MessageModel, error) {
 	query := `
-	SELECT m.id, m.chat_id, m.user_id, m.message, m.created_at
+	SELECT m.id, m.chat_id, m.user_id, 
+	CASE 
+	WHEN m.deleted_at 
+	IS NULL THEN m.message 
+	ELSE '' END AS message, m.created_at, m.edited_at, m.deleted_at
 	FROM messages AS m
 	WHERE m.chat_id = $1 AND m.id < $2
 	ORDER BY m.id DESC
@@ -104,6 +110,8 @@ func (r *Repository) ListMessage(
 			&m.UserID,
 			&m.Message,
 			&m.CreatedAt,
+			&m.EditedAt,
+			&m.DeletedAt,
 		); err != nil {
 			return nil, fmt.Errorf(
 				"scan message: %w",
@@ -130,7 +138,7 @@ func (r *Repository) SearchMessages(
 	querySearch := `
 	SELECT m.id, m.chat_id, m.user_id, m.message, m.created_at
 	FROM messages AS m
-	WHERE m.chat_id = $1 AND m.message ILIKE '%' || $2 || '%'
+	WHERE m.chat_id = $1 AND m.message ILIKE '%' || $2 || '%' AND m.deleted_at IS NULL
 	ORDER BY m.id DESC
 	LIMIT 50;
 	`
@@ -211,4 +219,71 @@ func (r *Repository) ListMemberIDs(
 	}
 
 	return userID, nil
+}
+
+func (r *Repository) UpdateMessage(
+	ctx context.Context,
+	chatID, msgID, userID int,
+	msg string,
+) (MessageModel, error) {
+	query := `
+	UPDATE messages
+	SET message = $4, edited_at = now()
+	WHERE id = $2
+	AND chat_id = $1
+    AND user_id = $3
+	AND deleted_at IS NULL
+	RETURNING id, chat_id, user_id, message, created_at, edited_at, deleted_at;
+	`
+
+	var m MessageModel
+	if err := r.pool.QueryRow(ctx, query, chatID, msgID, userID, msg).Scan(
+		&m.ID,
+		&m.ChatID,
+		&m.UserID,
+		&m.Message,
+		&m.CreatedAt,
+		&m.EditedAt,
+		&m.DeletedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return MessageModel{}, ErrMessageNotFound
+		}
+		return MessageModel{}, fmt.Errorf(
+			"scan update message: %w",
+			err,
+		)
+	}
+
+	return m, nil
+}
+
+func (r *Repository) DeleteMessage(
+	ctx context.Context,
+	chatID, msgID, userID int,
+) error {
+	query := `
+	UPDATE messages
+	SET deleted_at = now()
+	WHERE id = $2
+	AND chat_id = $1
+    AND user_id = $3
+	AND deleted_at IS NULL
+	RETURNING id;
+	`
+
+	var id int
+	if err := r.pool.QueryRow(ctx, query, chatID, msgID, userID).Scan(
+		&id,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrMessageNotFound
+		}
+		return fmt.Errorf(
+			"scan delete message: %w",
+			err,
+		)
+	}
+
+	return nil
 }

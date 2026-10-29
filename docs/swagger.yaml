@@ -1,69 +1,9 @@
 basePath: /
 definitions:
-  AddMemberRequest:
-    properties:
-      user_id:
-        example: 40
-        type: integer
-    type: object
-  Chat:
-    properties:
-      created_at:
-        example: "2026-10-22T12:00:00Z"
-        type: string
-      id:
-        example: 13
-        type: integer
-      title:
-        example: Команда проекта
-        type: string
-        x-nullable: true
-      type:
-        enum:
-        - direct
-        - group
-        example: group
-        type: string
-    type: object
-  CreateChatResponse:
-    properties:
-      id:
-        example: 13
-        type: integer
-    type: object
-  CreateDirectRequest:
-    properties:
-      user_id:
-        example: 39
-        type: integer
-    type: object
-  CreateGroupRequest:
-    properties:
-      title:
-        example: Команда проекта
-        maxLength: 50
-        minLength: 1
-        type: string
-    type: object
   HealthResponse:
     properties:
       status:
         example: OK
-        type: string
-    type: object
-  LoginRequest:
-    properties:
-      email:
-        example: kuroame@example.com
-        type: string
-      password:
-        example: supersecret
-        type: string
-    type: object
-  LoginResponse:
-    properties:
-      token:
-        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         type: string
     type: object
   Message:
@@ -74,6 +14,12 @@ definitions:
       created_at:
         example: "2026-10-28T18:34:54Z"
         type: string
+      deleted:
+        example: false
+        type: boolean
+      edited_at:
+        example: "2026-10-28T18:40:12Z"
+        type: string
       id:
         example: 120
         type: integer
@@ -84,30 +30,7 @@ definitions:
         example: 38
         type: integer
     type: object
-  RegisterRequest:
-    properties:
-      email:
-        example: kuroame@example.com
-        maxLength: 250
-        type: string
-      login:
-        example: kuroame
-        maxLength: 25
-        minLength: 3
-        type: string
-      password:
-        example: supersecret
-        maxLength: 72
-        minLength: 8
-        type: string
-    type: object
-  RegisterResponse:
-    properties:
-      id:
-        example: 38
-        type: integer
-    type: object
-  SendMessageRequest:
+  MessageRequest:
     properties:
       message:
         example: Привет!
@@ -115,47 +38,73 @@ definitions:
         minLength: 1
         type: string
     type: object
-  User:
+  auth.loginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  auth.loginResponse:
+    properties:
+      token:
+        type: string
+    type: object
+  auth.meResponse:
     properties:
       created_at:
-        example: "2026-10-20T18:30:00Z"
         type: string
       email:
-        example: kuroame@example.com
         type: string
       id:
-        example: 38
         type: integer
       login:
-        example: kuroame
         type: string
     type: object
-  WSIncomingMessage:
+  auth.registerRequest:
     properties:
-      chat_id:
-        example: 13
-        type: integer
-      message:
-        example: Привет!
+      email:
+        type: string
+      login:
+        type: string
+      password:
         type: string
     type: object
-  WSOutgoingMessage:
+  auth.registerResponse:
     properties:
-      chat_id:
-        example: 13
+      id:
         type: integer
+    type: object
+  chats.addMemberRequest:
+    properties:
+      user_id:
+        type: integer
+    type: object
+  chats.chatResponse:
+    properties:
       created_at:
-        example: "2026-10-28T18:34:54Z"
         type: string
       id:
-        example: 120
         type: integer
-      message:
-        example: Привет!
+      title:
         type: string
-      user_id:
-        example: 38
+      type:
+        type: string
+    type: object
+  chats.createChatResponse:
+    properties:
+      id:
         type: integer
+    type: object
+  chats.createDirectRequest:
+    properties:
+      user_id:
+        type: integer
+    type: object
+  chats.createGroupRequest:
+    properties:
+      title:
+        type: string
     type: object
 host: localhost:8080
 info:
@@ -180,7 +129,7 @@ paths:
           description: Список чатов (может быть пустым)
           schema:
             items:
-              $ref: '#/definitions/Chat'
+              $ref: '#/definitions/chats.chatResponse'
             type: array
         "401":
           description: invalid token
@@ -212,7 +161,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/AddMemberRequest'
+          $ref: '#/definitions/chats.addMemberRequest'
       responses:
         "204":
           description: Участник добавлен
@@ -354,7 +303,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/SendMessageRequest'
+          $ref: '#/definitions/MessageRequest'
       produces:
       - application/json
       responses:
@@ -381,6 +330,100 @@ paths:
       security:
       - BearerAuth: []
       summary: Отправить сообщение (HTTP)
+      tags:
+      - messages
+  /chats/{id}/messages/{msgID}:
+    delete:
+      description: 'Мягкое удаление своего сообщения: строка остаётся в базе с `deleted_at`,
+        а в истории сообщение приходит с `"deleted": true` и пустым текстом. В поиск
+        удалённые не попадают. Участники чата онлайн получают по WebSocket событие
+        `{"type":"message.deleted","chat_id":13,"id":120}`.'
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ID сообщения
+        in: path
+        name: msgID
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: Сообщение удалено
+        "400":
+          description: invalid message id
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found / message not found (чужое, уже удалённое или
+            не существует)
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Удалить сообщение
+      tags:
+      - messages
+    patch:
+      consumes:
+      - application/json
+      description: Меняет текст своего сообщения и ставит `edited_at`. Изменить можно
+        только своё и не удалённое сообщение. Участники чата онлайн получают по WebSocket
+        событие `{"type":"message.edited","message":{...}}`.
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ID сообщения
+        in: path
+        name: msgID
+        required: true
+        type: integer
+      - description: Новый текст (1–500 символов)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/MessageRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Сообщение изменено
+          schema:
+            $ref: '#/definitions/Message'
+        "400":
+          description: message must be 1-500 symbols
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found / message not found (чужое, удалённое или не
+            существует)
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Изменить сообщение
       tags:
       - messages
   /chats/{id}/messages/search:
@@ -441,18 +484,18 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/CreateDirectRequest'
+          $ref: '#/definitions/chats.createDirectRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Чат уже существовал
           schema:
-            $ref: '#/definitions/CreateChatResponse'
+            $ref: '#/definitions/chats.createChatResponse'
         "201":
           description: Чат создан
           schema:
-            $ref: '#/definitions/CreateChatResponse'
+            $ref: '#/definitions/chats.createChatResponse'
         "400":
           description: Невалидный JSON или чат с самим собой
           schema:
@@ -486,14 +529,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/CreateGroupRequest'
+          $ref: '#/definitions/chats.createGroupRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Группа создана
           schema:
-            $ref: '#/definitions/CreateChatResponse'
+            $ref: '#/definitions/chats.createChatResponse'
         "400":
           description: Невалидный JSON или название
           schema:
@@ -536,14 +579,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/LoginRequest'
+          $ref: '#/definitions/auth.loginRequest'
       produces:
       - application/json
       responses:
         "200":
           description: JWT
           schema:
-            $ref: '#/definitions/LoginResponse'
+            $ref: '#/definitions/auth.loginResponse'
         "400":
           description: Невалидный JSON или данные
           schema:
@@ -572,7 +615,7 @@ paths:
         "200":
           description: Профиль
           schema:
-            $ref: '#/definitions/User'
+            $ref: '#/definitions/auth.meResponse'
         "401":
           description: invalid token
           schema:
@@ -602,14 +645,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/RegisterRequest'
+          $ref: '#/definitions/auth.registerRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Пользователь создан
           schema:
-            $ref: '#/definitions/RegisterResponse'
+            $ref: '#/definitions/auth.registerResponse'
         "400":
           description: Невалидный JSON или данные
           schema:
@@ -629,43 +672,6 @@ paths:
       summary: Регистрация
       tags:
       - auth
-  /ws:
-    get:
-      description: |-
-        Открывает WebSocket. Swagger UI не умеет подключаться к WebSocket: проверяйте в Postman (New → WebSocket) или через фронтенд.
-
-        **Подключение:** `ws://localhost:8080/ws?token=<JWT>`. Токен передаётся в query, потому что браузер не может ставить заголовки при открытии WebSocket.
-
-        **Клиент → сервер:** `{"chat_id": 13, "message": "Привет!"}` (модель WSIncomingMessage).
-
-        **Сервер → клиент:** сохранённое сообщение (модель WSOutgoingMessage) рассылается всем участникам чата, которые сейчас онлайн, включая отправителя. Для него это подтверждение доставки.
-
-        **Ошибки** приходят только отправителю: `{"error": "bad json"}`, `{"error": "invalid message"}`, `{"error": "chat not found"}`, `{"error": "internal error"}`.
-      parameters:
-      - description: JWT из /login
-        in: query
-        name: token
-        required: true
-        type: string
-      - description: Формат сообщения клиента (отправляется по WebSocket, не в теле
-          HTTP)
-        in: body
-        name: message
-        schema:
-          $ref: '#/definitions/WSIncomingMessage'
-      responses:
-        "101":
-          description: Соединение переключено на WebSocket; так выглядят входящие
-            сообщения
-          schema:
-            $ref: '#/definitions/WSOutgoingMessage'
-        "401":
-          description: invalid token
-          schema:
-            type: string
-      summary: 'WebSocket: сообщения в реальном времени'
-      tags:
-      - realtime
 schemes:
 - http
 securityDefinitions:

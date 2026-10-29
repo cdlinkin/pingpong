@@ -17,6 +17,12 @@ type fakeRepo struct {
 	listCalls   int
 	searchCalls int
 	isMemberErr error
+
+	gotText     string
+	updateCalls int
+	deleteCalls int
+	updateErr   error
+	deleteErr   error
 }
 
 func (f *fakeRepo) IsMember(ctx context.Context, chatID, userID int) (bool, error) {
@@ -52,6 +58,20 @@ func (f *fakeRepo) SearchMessages(ctx context.Context, chatID int, query string)
 
 func (f *fakeRepo) ListMemberIDs(ctx context.Context, chatID int) ([]int, error) {
 	return f.members[chatID], nil
+}
+
+func (f *fakeRepo) UpdateMessage(ctx context.Context, chatID, msgID, userID int, msg string) (MessageModel, error) {
+	f.updateCalls++
+	f.gotText = msg
+	if f.updateErr != nil {
+		return MessageModel{}, f.updateErr
+	}
+	return MessageModel{ID: msgID, ChatID: chatID, UserID: userID, Message: msg}, nil
+}
+
+func (f *fakeRepo) DeleteMessage(ctx context.Context, chatID, msgID, userID int) error {
+	f.deleteCalls++
+	return f.deleteErr
 }
 
 const (
@@ -188,6 +208,76 @@ func TestSearchMessages(t *testing.T) {
 			}
 			if repo.searchCalls != 0 {
 				t.Fatal("search must not reach repository")
+			}
+		})
+	}
+}
+
+func TestEditMessage(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ok, text is trimmed", func(t *testing.T) {
+		repo := newFakeRepo()
+		msg, err := NewService(repo).EditMessage(ctx, member, chatID, 5, "  новый текст ")
+		if err != nil {
+			t.Fatalf("edit: %v", err)
+		}
+		if repo.gotText != "новый текст" || msg.Message != "новый текст" {
+			t.Fatalf("text must be trimmed, got %q", repo.gotText)
+		}
+	})
+
+	tests := []struct {
+		name      string
+		userID    int
+		text      string
+		updateErr error
+		wantErr   error
+		wantCalls int
+	}{
+		{"empty text", member, "   ", nil, ErrInvalidInput, 0},
+		{"not a member", stranger, "hi", nil, ErrChatNotFound, 0},
+		{"not author or deleted", member, "hi", ErrMessageNotFound, ErrMessageNotFound, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newFakeRepo()
+			repo.updateErr = tt.updateErr
+			_, err := NewService(repo).EditMessage(ctx, tt.userID, chatID, 5, tt.text)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("want %v, got %v", tt.wantErr, err)
+			}
+			if repo.updateCalls != tt.wantCalls {
+				t.Fatalf("want %d update calls, got %d", tt.wantCalls, repo.updateCalls)
+			}
+		})
+	}
+}
+
+func TestDeleteMessage(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name      string
+		userID    int
+		deleteErr error
+		wantErr   error
+		wantCalls int
+	}{
+		{"ok", member, nil, nil, 1},
+		{"not a member", stranger, nil, ErrChatNotFound, 0},
+		{"not author or already deleted", member, ErrMessageNotFound, ErrMessageNotFound, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newFakeRepo()
+			repo.deleteErr = tt.deleteErr
+			err := NewService(repo).DeleteMessage(ctx, tt.userID, chatID, 5)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("want %v, got %v", tt.wantErr, err)
+			}
+			if repo.deleteCalls != tt.wantCalls {
+				t.Fatalf("want %d delete calls, got %d", tt.wantCalls, repo.deleteCalls)
 			}
 		})
 	}

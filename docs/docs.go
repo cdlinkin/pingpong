@@ -36,7 +36,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/Chat"
+                                "$ref": "#/definitions/chats.chatResponse"
                             }
                         }
                     },
@@ -80,7 +80,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/CreateDirectRequest"
+                            "$ref": "#/definitions/chats.createDirectRequest"
                         }
                     }
                 ],
@@ -88,13 +88,13 @@ const docTemplate = `{
                     "200": {
                         "description": "Чат уже существовал",
                         "schema": {
-                            "$ref": "#/definitions/CreateChatResponse"
+                            "$ref": "#/definitions/chats.createChatResponse"
                         }
                     },
                     "201": {
                         "description": "Чат создан",
                         "schema": {
-                            "$ref": "#/definitions/CreateChatResponse"
+                            "$ref": "#/definitions/chats.createChatResponse"
                         }
                     },
                     "400": {
@@ -149,7 +149,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/CreateGroupRequest"
+                            "$ref": "#/definitions/chats.createGroupRequest"
                         }
                     }
                 ],
@@ -157,7 +157,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Группа создана",
                         "schema": {
-                            "$ref": "#/definitions/CreateChatResponse"
+                            "$ref": "#/definitions/chats.createChatResponse"
                         }
                     },
                     "400": {
@@ -210,7 +210,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/AddMemberRequest"
+                            "$ref": "#/definitions/chats.addMemberRequest"
                         }
                     }
                 ],
@@ -427,7 +427,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/SendMessageRequest"
+                            "$ref": "#/definitions/MessageRequest"
                         }
                     }
                 ],
@@ -533,6 +533,140 @@ const docTemplate = `{
                 }
             }
         },
+        "/chats/{id}/messages/{msgID}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Мягкое удаление своего сообщения: строка остаётся в базе с ` + "`" + `deleted_at` + "`" + `, а в истории сообщение приходит с ` + "`" + `\"deleted\": true` + "`" + ` и пустым текстом. В поиск удалённые не попадают. Участники чата онлайн получают по WebSocket событие ` + "`" + `{\"type\":\"message.deleted\",\"chat_id\":13,\"id\":120}` + "`" + `.",
+                "tags": [
+                    "messages"
+                ],
+                "summary": "Удалить сообщение",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID чата",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "ID сообщения",
+                        "name": "msgID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Сообщение удалено"
+                    },
+                    "400": {
+                        "description": "invalid message id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "chat not found / message not found (чужое, уже удалённое или не существует)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Меняет текст своего сообщения и ставит ` + "`" + `edited_at` + "`" + `. Изменить можно только своё и не удалённое сообщение. Участники чата онлайн получают по WebSocket событие ` + "`" + `{\"type\":\"message.edited\",\"message\":{...}}` + "`" + `.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messages"
+                ],
+                "summary": "Изменить сообщение",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID чата",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "ID сообщения",
+                        "name": "msgID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Новый текст (1–500 символов)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/MessageRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Сообщение изменено",
+                        "schema": {
+                            "$ref": "#/definitions/Message"
+                        }
+                    },
+                    "400": {
+                        "description": "message must be 1-500 symbols",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "chat not found / message not found (чужое, удалённое или не существует)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Отвечает ` + "`" + `{\"status\":\"OK\"}` + "`" + `, если сервер запущен.",
@@ -573,7 +707,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/LoginRequest"
+                            "$ref": "#/definitions/auth.loginRequest"
                         }
                     }
                 ],
@@ -581,7 +715,7 @@ const docTemplate = `{
                     "200": {
                         "description": "JWT",
                         "schema": {
-                            "$ref": "#/definitions/LoginResponse"
+                            "$ref": "#/definitions/auth.loginResponse"
                         }
                     },
                     "400": {
@@ -630,7 +764,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Профиль",
                         "schema": {
-                            "$ref": "#/definitions/User"
+                            "$ref": "#/definitions/auth.meResponse"
                         }
                     },
                     "401": {
@@ -674,7 +808,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/RegisterRequest"
+                            "$ref": "#/definitions/auth.registerRequest"
                         }
                     }
                 ],
@@ -682,7 +816,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Пользователь создан",
                         "schema": {
-                            "$ref": "#/definitions/RegisterResponse"
+                            "$ref": "#/definitions/auth.registerResponse"
                         }
                     },
                     "400": {
@@ -711,141 +845,15 @@ const docTemplate = `{
                     }
                 }
             }
-        },
-        "/ws": {
-            "get": {
-                "description": "Открывает WebSocket. Swagger UI не умеет подключаться к WebSocket: проверяйте в Postman (New → WebSocket) или через фронтенд.\n\n**Подключение:** ` + "`" + `ws://localhost:8080/ws?token=\u003cJWT\u003e` + "`" + `. Токен передаётся в query, потому что браузер не может ставить заголовки при открытии WebSocket.\n\n**Клиент → сервер:** ` + "`" + `{\"chat_id\": 13, \"message\": \"Привет!\"}` + "`" + ` (модель WSIncomingMessage).\n\n**Сервер → клиент:** сохранённое сообщение (модель WSOutgoingMessage) рассылается всем участникам чата, которые сейчас онлайн, включая отправителя. Для него это подтверждение доставки.\n\n**Ошибки** приходят только отправителю: ` + "`" + `{\"error\": \"bad json\"}` + "`" + `, ` + "`" + `{\"error\": \"invalid message\"}` + "`" + `, ` + "`" + `{\"error\": \"chat not found\"}` + "`" + `, ` + "`" + `{\"error\": \"internal error\"}` + "`" + `.",
-                "tags": [
-                    "realtime"
-                ],
-                "summary": "WebSocket: сообщения в реальном времени",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "JWT из /login",
-                        "name": "token",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "description": "Формат сообщения клиента (отправляется по WebSocket, не в теле HTTP)",
-                        "name": "message",
-                        "in": "body",
-                        "schema": {
-                            "$ref": "#/definitions/WSIncomingMessage"
-                        }
-                    }
-                ],
-                "responses": {
-                    "101": {
-                        "description": "Соединение переключено на WebSocket; так выглядят входящие сообщения",
-                        "schema": {
-                            "$ref": "#/definitions/WSOutgoingMessage"
-                        }
-                    },
-                    "401": {
-                        "description": "invalid token",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
         }
     },
     "definitions": {
-        "AddMemberRequest": {
-            "type": "object",
-            "properties": {
-                "user_id": {
-                    "type": "integer",
-                    "example": 40
-                }
-            }
-        },
-        "Chat": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string",
-                    "example": "2026-10-22T12:00:00Z"
-                },
-                "id": {
-                    "type": "integer",
-                    "example": 13
-                },
-                "title": {
-                    "type": "string",
-                    "x-nullable": true,
-                    "example": "Команда проекта"
-                },
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "direct",
-                        "group"
-                    ],
-                    "example": "group"
-                }
-            }
-        },
-        "CreateChatResponse": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer",
-                    "example": 13
-                }
-            }
-        },
-        "CreateDirectRequest": {
-            "type": "object",
-            "properties": {
-                "user_id": {
-                    "type": "integer",
-                    "example": 39
-                }
-            }
-        },
-        "CreateGroupRequest": {
-            "type": "object",
-            "properties": {
-                "title": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 1,
-                    "example": "Команда проекта"
-                }
-            }
-        },
         "HealthResponse": {
             "type": "object",
             "properties": {
                 "status": {
                     "type": "string",
                     "example": "OK"
-                }
-            }
-        },
-        "LoginRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "kuroame@example.com"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "supersecret"
-                }
-            }
-        },
-        "LoginResponse": {
-            "type": "object",
-            "properties": {
-                "token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                 }
             }
         },
@@ -860,6 +868,14 @@ const docTemplate = `{
                     "type": "string",
                     "example": "2026-10-28T18:34:54Z"
                 },
+                "deleted": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "edited_at": {
+                    "type": "string",
+                    "example": "2026-10-28T18:40:12Z"
+                },
                 "id": {
                     "type": "integer",
                     "example": 120
@@ -874,38 +890,7 @@ const docTemplate = `{
                 }
             }
         },
-        "RegisterRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "maxLength": 250,
-                    "example": "kuroame@example.com"
-                },
-                "login": {
-                    "type": "string",
-                    "maxLength": 25,
-                    "minLength": 3,
-                    "example": "kuroame"
-                },
-                "password": {
-                    "type": "string",
-                    "maxLength": 72,
-                    "minLength": 8,
-                    "example": "supersecret"
-                }
-            }
-        },
-        "RegisterResponse": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer",
-                    "example": 38
-                }
-            }
-        },
-        "SendMessageRequest": {
+        "MessageRequest": {
             "type": "object",
             "properties": {
                 "message": {
@@ -916,62 +901,110 @@ const docTemplate = `{
                 }
             }
         },
-        "User": {
+        "auth.loginRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.loginResponse": {
+            "type": "object",
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "auth.meResponse": {
             "type": "object",
             "properties": {
                 "created_at": {
-                    "type": "string",
-                    "example": "2026-10-20T18:30:00Z"
+                    "type": "string"
                 },
                 "email": {
-                    "type": "string",
-                    "example": "kuroame@example.com"
+                    "type": "string"
                 },
                 "id": {
-                    "type": "integer",
-                    "example": 38
+                    "type": "integer"
                 },
                 "login": {
-                    "type": "string",
-                    "example": "kuroame"
+                    "type": "string"
                 }
             }
         },
-        "WSIncomingMessage": {
+        "auth.registerRequest": {
             "type": "object",
             "properties": {
-                "chat_id": {
-                    "type": "integer",
-                    "example": 13
+                "email": {
+                    "type": "string"
                 },
-                "message": {
-                    "type": "string",
-                    "example": "Привет!"
+                "login": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
                 }
             }
         },
-        "WSOutgoingMessage": {
+        "auth.registerResponse": {
             "type": "object",
             "properties": {
-                "chat_id": {
-                    "type": "integer",
-                    "example": 13
-                },
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "chats.addMemberRequest": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "chats.chatResponse": {
+            "type": "object",
+            "properties": {
                 "created_at": {
-                    "type": "string",
-                    "example": "2026-10-28T18:34:54Z"
+                    "type": "string"
                 },
                 "id": {
-                    "type": "integer",
-                    "example": 120
+                    "type": "integer"
                 },
-                "message": {
-                    "type": "string",
-                    "example": "Привет!"
+                "title": {
+                    "type": "string"
                 },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "chats.createChatResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "chats.createDirectRequest": {
+            "type": "object",
+            "properties": {
                 "user_id": {
-                    "type": "integer",
-                    "example": 38
+                    "type": "integer"
+                }
+            }
+        },
+        "chats.createGroupRequest": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string"
                 }
             }
         }
