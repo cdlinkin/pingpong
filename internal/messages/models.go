@@ -11,3 +11,8 @@ type MessageModel struct {
 	EditedAt  *time.Time
 	DeletedAt *time.Time
 }
+
+type ReadModel struct {
+	UserID     int
+	LastReadID int
+}
