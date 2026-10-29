@@ -8,13 +8,19 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type repository interface {
+	CreateUser(ctx context.Context, login, email, passwordHash string) (int, error)
+	GetUserByEmail(ctx context.Context, email string) (UserModel, error)
+	GetUserByID(ctx context.Context, id int) (UserModel, error)
+}
+
 type Service struct {
-	repository *Repository
+	repository repository
 	jwtSecret  []byte
 }
 
 func NewService(
-	repository *Repository,
+	repository repository,
 	jwtSecret []byte,
 ) *Service {
 	return &Service{

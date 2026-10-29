@@ -6,11 +6,19 @@ import (
 	"math"
 )
 
-type Service struct {
-	repository *Repository
+type repository interface {
+	IsMember(ctx context.Context, chatID, userID int) (bool, error)
+	CreateMessage(ctx context.Context, chatID, userID int, message string) (MessageModel, error)
+	ListMessage(ctx context.Context, chatID, beforeID, limit int) ([]MessageModel, error)
+	SearchMessages(ctx context.Context, chatID int, query string) ([]MessageModel, error)
+	ListMemberIDs(ctx context.Context, chatID int) ([]int, error)
 }
 
-func NewService(repository *Repository) *Service {
+type Service struct {
+	repository repository
+}
+
+func NewService(repository repository) *Service {
 	return &Service{
 		repository: repository,
 	}
