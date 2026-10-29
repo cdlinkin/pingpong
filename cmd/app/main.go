@@ -110,11 +110,12 @@ func main() {
 	chatsService := chats.NewService(chatsRepo)
 	chatsHandler := chats.NewHandler(chatsService)
 
+	wsHub := ws.NewHub()
+
 	msgRepo := messages.NewRepository(pool)
 	msgService := messages.NewService(msgRepo)
-	msgHandler := messages.NewHandler(msgService)
+	msgHandler := messages.NewHandler(msgService, wsHub)
 
-	wsHub := ws.NewHub()
 	wsHandler := ws.NewHandler([]byte(jwtSecret), wsHub, msgService)
 
 	mux := http.NewServeMux()
@@ -138,6 +139,9 @@ func main() {
 	mux.Handle("GET /chats/{id}/messages/search", middleware.Auth(http.HandlerFunc(msgHandler.SearchMessages)))
 	mux.HandleFunc("GET /ws", wsHandler.ServeWS)
 	mux.HandleFunc("GET /{$}", index)
+	mux.Handle("PATCH /chats/{id}/messages/{msgID}", middleware.Auth(http.HandlerFunc(msgHandler.EditMessage)))
+	mux.Handle("DELETE /chats/{id}/messages/{msgID}", middleware.Auth(http.HandlerFunc(msgHandler.DeleteMessage)))
+
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("error to run server: %v", err)
 	}
