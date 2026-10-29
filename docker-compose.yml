@@ -9,9 +9,21 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  migrate:
+    image: migrate/migrate:v4.18.1
+    volumes:
+      - ./migrations:/migrations
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pingpong-postgres:5432/${POSTGRES_DB}?sslmode=disable"
+      - "up"
+    depends_on:
       pingpong-postgres:
         condition: service_healthy
-    restart: unless-stopped
 
   pingpong-postgres:
     image: postgres:18
@@ -22,7 +34,6 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql
-      - ./migrations:/docker-entrypoint-initdb.d
     ports:
       - "5433:5432"
     healthcheck:

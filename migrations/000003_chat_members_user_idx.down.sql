@@ -1,0 +1,1 @@
+DROP INDEX idx_chat_member_user_id;
