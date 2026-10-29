@@ -6,12 +6,22 @@ import (
 	"fmt"
 )
 
+type repository interface {
+	CreateGroupChat(ctx context.Context, title string, creatorID int) (int, error)
+	CreateDirectChat(ctx context.Context, userA, userB int) (int, error)
+	FindDirectChat(ctx context.Context, userA, userB int) (int, error)
+	ListUserChats(ctx context.Context, userID int) ([]ChatModel, error)
+	GetMemberRole(ctx context.Context, chatID, userID int) (string, error)
+	AddMember(ctx context.Context, chatID, userID int) error
+	RemoveMember(ctx context.Context, chatID, userID int) error
+}
+
 type Service struct {
-	repository *Repository
+	repository repository
 }
 
 func NewService(
-	repository *Repository,
+	repository repository,
 ) *Service {
 	return &Service{
 		repository: repository,
