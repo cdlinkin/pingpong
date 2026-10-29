@@ -80,7 +80,7 @@ func health(rw http.ResponseWriter, r *http.Request) {
 // @description				JWT из POST /login. Формат: `Bearer <token>`
 func main() {
 	if err := godotenv.Load(); err != nil {
-		log.Fatalf("godotenv load: %v", err)
+		log.Printf("no .env file, using environment variables: %v", err)
 	}
 	url := os.Getenv("DATABASE_URL")
 
