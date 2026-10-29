@@ -1,0 +1,1 @@
+DROP TABLE messages, chat_members, chats, users;

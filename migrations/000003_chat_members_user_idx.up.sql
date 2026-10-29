@@ -1,0 +1,1 @@
+CREATE INDEX idx_chat_member_user_id ON chat_members (user_id);

@@ -1,0 +1,1 @@
+DROP INDEX idx_messages_chat_id_id;
