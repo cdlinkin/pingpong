@@ -141,6 +141,8 @@ func main() {
 	mux.HandleFunc("GET /{$}", index)
 	mux.Handle("PATCH /chats/{id}/messages/{msgID}", middleware.Auth(http.HandlerFunc(msgHandler.EditMessage)))
 	mux.Handle("DELETE /chats/{id}/messages/{msgID}", middleware.Auth(http.HandlerFunc(msgHandler.DeleteMessage)))
+	mux.Handle("POST /chats/{id}/read", middleware.Auth(http.HandlerFunc(msgHandler.MarkRead)))
+	mux.Handle("GET /chats/{id}/reads", middleware.Auth(http.HandlerFunc(msgHandler.ListReads)))
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("error to run server: %v", err)

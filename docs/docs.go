@@ -22,7 +22,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Список чатов, в которых состоит текущий пользователь. У личных чатов ` + "`" + `title` + "`" + ` равен null.",
+                "description": "Список чатов, в которых состоит текущий пользователь. У личных чатов ` + "`" + `title` + "`" + ` равен null. ` + "`" + `unread_count` + "`" + ` — сколько чужих неудалённых сообщений новее моей отметки прочтения (см. ` + "`" + `POST /chats/{id}/read` + "`" + `).",
                 "produces": [
                     "application/json"
                 ],
@@ -36,7 +36,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/chats.chatResponse"
+                                "$ref": "#/definitions/Chat"
                             }
                         }
                     },
@@ -80,7 +80,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/chats.createDirectRequest"
+                            "$ref": "#/definitions/CreateDirectRequest"
                         }
                     }
                 ],
@@ -88,13 +88,13 @@ const docTemplate = `{
                     "200": {
                         "description": "Чат уже существовал",
                         "schema": {
-                            "$ref": "#/definitions/chats.createChatResponse"
+                            "$ref": "#/definitions/CreateChatResponse"
                         }
                     },
                     "201": {
                         "description": "Чат создан",
                         "schema": {
-                            "$ref": "#/definitions/chats.createChatResponse"
+                            "$ref": "#/definitions/CreateChatResponse"
                         }
                     },
                     "400": {
@@ -149,7 +149,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/chats.createGroupRequest"
+                            "$ref": "#/definitions/CreateGroupRequest"
                         }
                     }
                 ],
@@ -157,7 +157,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Группа создана",
                         "schema": {
-                            "$ref": "#/definitions/chats.createChatResponse"
+                            "$ref": "#/definitions/CreateChatResponse"
                         }
                     },
                     "400": {
@@ -210,7 +210,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/chats.addMemberRequest"
+                            "$ref": "#/definitions/AddMemberRequest"
                         }
                     }
                 ],
@@ -667,6 +667,131 @@ const docTemplate = `{
                 }
             }
         },
+        "/chats/{id}/read": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Сообщает, что пользователь дочитал чат до сообщения ` + "`" + `message_id` + "`" + `. Отметка только растёт и не может уйти дальше последнего сообщения чата. Участники онлайн получают по WebSocket событие ` + "`" + `{\"type\":\"message.read\",\"chat_id\":13,\"user_id\":38,\"message_id\":120}` + "`" + ` с итоговой отметкой.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messages"
+                ],
+                "summary": "Отметить чат прочитанным",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID чата",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "До какого сообщения прочитано",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/MarkReadRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Отметка сохранена"
+                    },
+                    "400": {
+                        "description": "invalid JSON / invalid input",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "chat not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/chats/{id}/reads": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "До какого сообщения дочитал каждый участник чата. Сообщение «прочитано», если у кого-то из остальных участников ` + "`" + `last_read_message_id` + "`" + ` больше или равен его id.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messages"
+                ],
+                "summary": "Отметки прочтения участников",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID чата",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Отметки участников",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/ReadMark"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "invalid chat id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "chat not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Отвечает ` + "`" + `{\"status\":\"OK\"}` + "`" + `, если сервер запущен.",
@@ -848,12 +973,89 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "AddMemberRequest": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "integer",
+                    "example": 40
+                }
+            }
+        },
+        "Chat": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2026-10-22T12:00:00Z"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 13
+                },
+                "title": {
+                    "type": "string",
+                    "x-nullable": true,
+                    "example": "Команда проекта"
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "direct",
+                        "group"
+                    ],
+                    "example": "group"
+                },
+                "unread_count": {
+                    "type": "integer",
+                    "example": 3
+                }
+            }
+        },
+        "CreateChatResponse": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 13
+                }
+            }
+        },
+        "CreateDirectRequest": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "integer",
+                    "example": 39
+                }
+            }
+        },
+        "CreateGroupRequest": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1,
+                    "example": "Команда проекта"
+                }
+            }
+        },
         "HealthResponse": {
             "type": "object",
             "properties": {
                 "status": {
                     "type": "string",
                     "example": "OK"
+                }
+            }
+        },
+        "MarkReadRequest": {
+            "type": "object",
+            "properties": {
+                "message_id": {
+                    "type": "integer",
+                    "example": 120
                 }
             }
         },
@@ -898,6 +1100,19 @@ const docTemplate = `{
                     "maxLength": 500,
                     "minLength": 1,
                     "example": "Привет!"
+                }
+            }
+        },
+        "ReadMark": {
+            "type": "object",
+            "properties": {
+                "last_read_message_id": {
+                    "type": "integer",
+                    "example": 120
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 39
                 }
             }
         },
@@ -956,55 +1171,6 @@ const docTemplate = `{
             "properties": {
                 "id": {
                     "type": "integer"
-                }
-            }
-        },
-        "chats.addMemberRequest": {
-            "type": "object",
-            "properties": {
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "chats.chatResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                }
-            }
-        },
-        "chats.createChatResponse": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "chats.createDirectRequest": {
-            "type": "object",
-            "properties": {
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "chats.createGroupRequest": {
-            "type": "object",
-            "properties": {
-                "title": {
-                    "type": "string"
                 }
             }
         }

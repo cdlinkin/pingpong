@@ -1,10 +1,64 @@
 basePath: /
 definitions:
+  AddMemberRequest:
+    properties:
+      user_id:
+        example: 40
+        type: integer
+    type: object
+  Chat:
+    properties:
+      created_at:
+        example: "2026-10-22T12:00:00Z"
+        type: string
+      id:
+        example: 13
+        type: integer
+      title:
+        example: Команда проекта
+        type: string
+        x-nullable: true
+      type:
+        enum:
+        - direct
+        - group
+        example: group
+        type: string
+      unread_count:
+        example: 3
+        type: integer
+    type: object
+  CreateChatResponse:
+    properties:
+      id:
+        example: 13
+        type: integer
+    type: object
+  CreateDirectRequest:
+    properties:
+      user_id:
+        example: 39
+        type: integer
+    type: object
+  CreateGroupRequest:
+    properties:
+      title:
+        example: Команда проекта
+        maxLength: 50
+        minLength: 1
+        type: string
+    type: object
   HealthResponse:
     properties:
       status:
         example: OK
         type: string
+    type: object
+  MarkReadRequest:
+    properties:
+      message_id:
+        example: 120
+        type: integer
     type: object
   Message:
     properties:
@@ -37,6 +91,15 @@ definitions:
         maxLength: 500
         minLength: 1
         type: string
+    type: object
+  ReadMark:
+    properties:
+      last_read_message_id:
+        example: 120
+        type: integer
+      user_id:
+        example: 39
+        type: integer
     type: object
   auth.loginRequest:
     properties:
@@ -75,37 +138,6 @@ definitions:
       id:
         type: integer
     type: object
-  chats.addMemberRequest:
-    properties:
-      user_id:
-        type: integer
-    type: object
-  chats.chatResponse:
-    properties:
-      created_at:
-        type: string
-      id:
-        type: integer
-      title:
-        type: string
-      type:
-        type: string
-    type: object
-  chats.createChatResponse:
-    properties:
-      id:
-        type: integer
-    type: object
-  chats.createDirectRequest:
-    properties:
-      user_id:
-        type: integer
-    type: object
-  chats.createGroupRequest:
-    properties:
-      title:
-        type: string
-    type: object
 host: localhost:8080
 info:
   contact: {}
@@ -121,7 +153,8 @@ paths:
   /chats:
     get:
       description: Список чатов, в которых состоит текущий пользователь. У личных
-        чатов `title` равен null.
+        чатов `title` равен null. `unread_count` — сколько чужих неудалённых сообщений
+        новее моей отметки прочтения (см. `POST /chats/{id}/read`).
       produces:
       - application/json
       responses:
@@ -129,7 +162,7 @@ paths:
           description: Список чатов (может быть пустым)
           schema:
             items:
-              $ref: '#/definitions/chats.chatResponse'
+              $ref: '#/definitions/Chat'
             type: array
         "401":
           description: invalid token
@@ -161,7 +194,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/chats.addMemberRequest'
+          $ref: '#/definitions/AddMemberRequest'
       responses:
         "204":
           description: Участник добавлен
@@ -471,6 +504,91 @@ paths:
       summary: Поиск по сообщениям
       tags:
       - messages
+  /chats/{id}/read:
+    post:
+      consumes:
+      - application/json
+      description: Сообщает, что пользователь дочитал чат до сообщения `message_id`.
+        Отметка только растёт и не может уйти дальше последнего сообщения чата. Участники
+        онлайн получают по WebSocket событие `{"type":"message.read","chat_id":13,"user_id":38,"message_id":120}`
+        с итоговой отметкой.
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: До какого сообщения прочитано
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/MarkReadRequest'
+      responses:
+        "204":
+          description: Отметка сохранена
+        "400":
+          description: invalid JSON / invalid input
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Отметить чат прочитанным
+      tags:
+      - messages
+  /chats/{id}/reads:
+    get:
+      description: До какого сообщения дочитал каждый участник чата. Сообщение «прочитано»,
+        если у кого-то из остальных участников `last_read_message_id` больше или равен
+        его id.
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Отметки участников
+          schema:
+            items:
+              $ref: '#/definitions/ReadMark'
+            type: array
+        "400":
+          description: invalid chat id
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Отметки прочтения участников
+      tags:
+      - messages
   /chats/direct:
     post:
       consumes:
@@ -484,18 +602,18 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/chats.createDirectRequest'
+          $ref: '#/definitions/CreateDirectRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Чат уже существовал
           schema:
-            $ref: '#/definitions/chats.createChatResponse'
+            $ref: '#/definitions/CreateChatResponse'
         "201":
           description: Чат создан
           schema:
-            $ref: '#/definitions/chats.createChatResponse'
+            $ref: '#/definitions/CreateChatResponse'
         "400":
           description: Невалидный JSON или чат с самим собой
           schema:
@@ -529,14 +647,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/chats.createGroupRequest'
+          $ref: '#/definitions/CreateGroupRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Группа создана
           schema:
-            $ref: '#/definitions/chats.createChatResponse'
+            $ref: '#/definitions/CreateChatResponse'
         "400":
           description: Невалидный JSON или название
           schema:

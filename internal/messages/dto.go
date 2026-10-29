@@ -26,3 +26,19 @@ type deletedEvent struct {
 	ChatID int    `json:"chat_id"`
 	MsgID  int    `json:"id"`
 }
+
+type markReadRequest struct {
+	MessageID int `json:"message_id" example:"120"`
+} //@name MarkReadRequest
+
+type readEvent struct {
+	Type   string `json:"type"`
+	ChatID int    `json:"chat_id"`
+	UserID int    `json:"user_id"`
+	MsgID  int    `json:"message_id"`
+}
+
+type readResponse struct {
+	UserID     int `json:"user_id" example:"39"`
+	LastReadID int `json:"last_read_message_id" example:"120"`
+} //@name ReadMark

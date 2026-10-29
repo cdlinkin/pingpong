@@ -156,7 +156,13 @@ func (r *Repository) ListUserChats(
 	userID int,
 ) ([]ChatModel, error) {
 	query := `
-	SELECT c.id, c.title, c.type, c.created_at
+	SELECT c.id, c.title, c.type, c.created_at,
+	(SELECT COUNT(*)
+	FROM messages msg
+	WHERE msg.chat_id = c.id
+	AND msg.id > m.last_read_message_id
+	AND msg.user_id <> $1
+	AND msg.deleted_at IS NULL) AS unread_count
 	FROM chats c
 	JOIN chat_members m ON m.chat_id = c.id
 	WHERE m.user_id = $1
@@ -180,6 +186,7 @@ func (r *Repository) ListUserChats(
 			&c.Title,
 			&c.Type,
 			&c.CreatedAt,
+			&c.UnreadCount,
 		); err != nil {
 			return nil, fmt.Errorf(
 				"scan chat: %w",

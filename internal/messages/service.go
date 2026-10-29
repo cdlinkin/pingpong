@@ -14,6 +14,8 @@ type repository interface {
 	ListMemberIDs(ctx context.Context, chatID int) ([]int, error)
 	UpdateMessage(ctx context.Context, chatID, msgID, userID int, msg string) (MessageModel, error)
 	DeleteMessage(ctx context.Context, chatID, msgID, userID int) error
+	MarkRead(ctx context.Context, chatID, userID, msgID int) (int, error)
+	ListReads(ctx context.Context, chatID int) ([]ReadModel, error)
 }
 
 type Service struct {
@@ -220,4 +222,55 @@ func (s *Service) DeleteMessage(
 	}
 
 	return nil
+}
+
+func (s *Service) MarkRead(
+	ctx context.Context,
+	chatID, userID, msgID int,
+) (int, error) {
+	if msgID <= 0 {
+		return 0, fmt.Errorf(
+			"message id invalid input: %w",
+			ErrInvalidInput,
+		)
+	}
+
+	lastReadID, err := s.repository.MarkRead(ctx, chatID, userID, msgID)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"mark read: %w",
+			err,
+		)
+	}
+
+	return lastReadID, nil
+}
+
+func (s *Service) ListReads(
+	ctx context.Context,
+	userID, chatID int,
+) ([]ReadModel, error) {
+	isMember, err := s.repository.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"is member: %w",
+			err,
+		)
+	}
+	if !isMember {
+		return nil, fmt.Errorf(
+			"user not in chat: %w",
+			ErrChatNotFound,
+		)
+	}
+
+	reads, err := s.repository.ListReads(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list reads: %w",
+			err,
+		)
+	}
+
+	return reads, nil
 }

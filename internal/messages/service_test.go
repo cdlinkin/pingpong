@@ -23,6 +23,12 @@ type fakeRepo struct {
 	deleteCalls int
 	updateErr   error
 	deleteErr   error
+
+	markCalls  int
+	gotMarkID  int
+	lastReadID int
+	markErr    error
+	readsCalls int
 }
 
 func (f *fakeRepo) IsMember(ctx context.Context, chatID, userID int) (bool, error) {
@@ -72,6 +78,20 @@ func (f *fakeRepo) UpdateMessage(ctx context.Context, chatID, msgID, userID int,
 func (f *fakeRepo) DeleteMessage(ctx context.Context, chatID, msgID, userID int) error {
 	f.deleteCalls++
 	return f.deleteErr
+}
+
+func (f *fakeRepo) ListReads(ctx context.Context, chatID int) ([]ReadModel, error) {
+	f.readsCalls++
+	return []ReadModel{{UserID: member, LastReadID: 7}}, nil
+}
+
+func (f *fakeRepo) MarkRead(ctx context.Context, chatID, userID, msgID int) (int, error) {
+	f.markCalls++
+	f.gotMarkID = msgID
+	if f.markErr != nil {
+		return 0, f.markErr
+	}
+	return f.lastReadID, nil
 }
 
 const (
@@ -281,4 +301,74 @@ func TestDeleteMessage(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMarkRead(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("ok returns final mark from repository", func(t *testing.T) {
+		repo := newFakeRepo()
+		repo.lastReadID = 120
+		got, err := NewService(repo).MarkRead(ctx, chatID, member, 80)
+		if err != nil {
+			t.Fatalf("mark read: %v", err)
+		}
+		if got != 120 {
+			t.Fatalf("want 120, got %d", got)
+		}
+		if repo.gotMarkID != 80 {
+			t.Fatalf("want message id 80 passed to repository, got %d", repo.gotMarkID)
+		}
+	})
+
+	tests := []struct {
+		name      string
+		msgID     int
+		markErr   error
+		wantErr   error
+		wantCalls int
+	}{
+		{"zero id", 0, nil, ErrInvalidInput, 0},
+		{"negative id", -5, nil, ErrInvalidInput, 0},
+		{"not a member", 10, ErrChatNotFound, ErrChatNotFound, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newFakeRepo()
+			repo.markErr = tt.markErr
+			_, err := NewService(repo).MarkRead(ctx, chatID, member, tt.msgID)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("want %v, got %v", tt.wantErr, err)
+			}
+			if repo.markCalls != tt.wantCalls {
+				t.Fatalf("want %d repository calls, got %d", tt.wantCalls, repo.markCalls)
+			}
+		})
+	}
+}
+
+func TestListReads(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("member gets marks", func(t *testing.T) {
+		repo := newFakeRepo()
+		reads, err := NewService(repo).ListReads(ctx, member, chatID)
+		if err != nil {
+			t.Fatalf("list reads: %v", err)
+		}
+		if len(reads) != 1 || reads[0].LastReadID != 7 {
+			t.Fatalf("unexpected reads: %+v", reads)
+		}
+	})
+
+	t.Run("stranger sees not found", func(t *testing.T) {
+		repo := newFakeRepo()
+		_, err := NewService(repo).ListReads(ctx, stranger, chatID)
+		if !errors.Is(err, ErrChatNotFound) {
+			t.Fatalf("want ErrChatNotFound, got %v", err)
+		}
+		if repo.readsCalls != 0 {
+			t.Fatal("marks must not be loaded for a stranger")
+		}
+	})
 }
