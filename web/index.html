@@ -479,6 +479,33 @@ section#chat { flex: 1; display: flex; flex-direction: column; min-width: 0; bac
 .bubble mark { background: color-mix(in srgb, var(--accent) 38%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
 .bubble .t { float: right; margin: 6px 0 0 10px; font-size: 11px; color: var(--text-3); line-height: 1; }
 .msg-row:not(.cont) .bubble .t { display: none; }
+.msg-meta .edited, .bubble .t .edited { color: var(--text-3); }
+
+/* удалённое сообщение: текста нет, только плашка */
+.bubble.deleted,
+.msg-row.mine .bubble.deleted {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--border);
+  color: var(--text-3);
+  font-style: italic;
+}
+.msg-row.editing .bubble { border-color: var(--accent); }
+
+/* действия над своим сообщением: появляются при наведении */
+.msg-actions {
+  display: flex;
+  align-self: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity .15s var(--ease);
+}
+.msg-row:hover .msg-actions,
+.msg-actions:focus-within { opacity: 1; }
+.msg-actions .icon-btn { width: 28px; height: 28px; color: var(--text-3); }
+.msg-actions .icon-btn:hover { color: var(--text); }
+.msg-actions .icon-btn.danger:hover { color: var(--danger); background: var(--danger-bg); }
+@media (hover: none) { .msg-actions { opacity: 1; } }
 
 .load-more {
   align-self: center;
@@ -504,6 +531,22 @@ section#chat { flex: 1; display: flex; flex-direction: column; min-width: 0; bac
 
 /* ---------- поле отправки ---------- */
 .composer-wrap { padding: 8px 24px 20px; }
+.edit-bar {
+  max-width: 820px;
+  margin: 0 auto 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 13px;
+}
+.edit-bar > span:first-child { color: var(--accent-text); display: grid; }
+.edit-bar .edit-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.edit-bar b { font-weight: 600; color: var(--accent-text); }
+.edit-bar .edit-preview { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .composer {
   max-width: 820px;
   margin: 0 auto;
@@ -785,11 +828,16 @@ kbd {
     </div>
 
     <div class="composer-wrap hidden" id="composerWrap">
+      <div class="edit-bar hidden" id="editBar">
+        <span data-icon="pencil"></span>
+        <div class="edit-text"><b>Редактирование</b><span class="edit-preview" id="editPreview"></span></div>
+        <button type="button" class="icon-btn" id="editCancel" title="Отменить (Esc)" data-icon="close"></button>
+      </div>
       <form class="composer" id="sendForm">
         <textarea id="messageField" rows="1" maxlength="500" placeholder="Написать сообщение…"></textarea>
         <button type="submit" class="send-btn" id="sendBtn" title="Отправить" data-icon="send" disabled></button>
       </form>
-      <div class="composer-hint"><kbd>Enter</kbd> отправить · <kbd>Shift</kbd>+<kbd>Enter</kbd> новая строка</div>
+      <div class="composer-hint"><kbd>Enter</kbd> отправить · <kbd>Shift</kbd>+<kbd>Enter</kbd> новая строка · <kbd>↑</kbd> изменить последнее</div>
     </div>
   </section>
 </div>
@@ -845,6 +893,8 @@ const ICONS = {
   check: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>',
   moon: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg>',
   sun: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>',
+  pencil: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>',
+  trash: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
   system: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>',
 };
 function fillIcons(root = document) {
@@ -897,6 +947,7 @@ const state = {
   searchQuery: "",
   unread: {},
   ws: null,
+  editing: null,       // сообщение, которое сейчас редактируем
 };
 const PAGE_SIZE = 30;
 const $ = (id) => document.getElementById(id);
@@ -939,6 +990,8 @@ function humanError(text) {
     "internal error": "Ошибка сервера, попробуйте позже",
     "invalid message": "Сообщение должно быть от 1 до 500 символов",
     "bad json": "Неверный формат сообщения",
+    "message must be 1-500 symbols": "Сообщение должно быть от 1 до 500 символов",
+    "message not found": "Сообщение не найдено или уже удалено",
   };
   for (const key in map) if (text.includes(key)) return map[key];
   return text;
@@ -1158,6 +1211,7 @@ async function openChat(chat) {
   state.messages = [];
   state.hasMore = false;
   state.searchQuery = "";
+  stopEditing();
   delete state.unread[chat.id];
   renderChats();
 
@@ -1260,22 +1314,57 @@ function messageRow(m, cont, highlight) {
     const time = document.createElement("span");
     time.className = "time";
     time.textContent = highlight ? `${dayStr(m.created_at)}, ${timeStr(m.created_at)}` : timeStr(m.created_at);
+    if (m.edited_at && !m.deleted) time.append(editedMark());
     meta.append(who, time);
     body.append(meta);
   }
 
   const bubble = document.createElement("div");
-  bubble.className = "bubble";
-  if (highlight) appendHighlighted(bubble, m.message, highlight);
+  bubble.className = "bubble" + (m.deleted ? " deleted" : "");
+  if (m.deleted) bubble.append(document.createTextNode("Сообщение удалено"));
+  else if (highlight) appendHighlighted(bubble, m.message, highlight);
   else bubble.append(document.createTextNode(m.message));
   const t = document.createElement("span");
   t.className = "t";
   t.textContent = timeStr(m.created_at);
+  if (m.edited_at && !m.deleted) t.prepend(editedMark(true));
   bubble.append(t);
   body.append(bubble);
 
   row.append(av, body);
+  if (mine && !m.deleted && !highlight) row.append(messageActions(m));
+  if (state.editing && state.editing.id === m.id) row.classList.add("editing");
   return row;
+}
+
+function editedMark(before) {
+  const span = document.createElement("span");
+  span.className = "edited";
+  span.textContent = before ? "изменено · " : " · изменено";
+  return span;
+}
+
+// Кнопки «изменить» и «удалить» у своих сообщений
+function messageActions(m) {
+  const box = document.createElement("div");
+  box.className = "msg-actions";
+
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "icon-btn";
+  edit.title = "Изменить";
+  edit.innerHTML = ICONS.pencil;
+  edit.onclick = () => startEditing(m);
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "icon-btn danger";
+  del.title = "Удалить";
+  del.innerHTML = ICONS.trash;
+  del.onclick = () => deleteMessage(m);
+
+  box.append(edit, del);
+  return box;
 }
 
 // Подсветка найденного текста без innerHTML (безопасно)
@@ -1317,6 +1406,61 @@ function addIncoming(m) {
   if (state.searchQuery) return; // в режиме поиска не мешаем, сообщение появится после выхода
   renderMessages();
   if (nearBottom || m.user_id === state.me.id) scrollToBottom();
+}
+
+// Правка или удаление пришли по WebSocket (или это наш собственный ответ на PATCH/DELETE)
+function updateMessage(chatId, id, patch) {
+  if (state.editing && state.editing.id === id && patch.deleted) stopEditing();
+  if (!state.currentChat || state.currentChat.id !== chatId) return;
+  const m = state.messages.find((x) => x.id === id);
+  if (!m) return; // сообщение ещё не подгружено — увидим актуальную версию из истории
+  Object.assign(m, patch);
+  if (!state.searchQuery) renderMessages();
+  else if (patch.deleted) runSearch(); // удалённое пропадёт из результатов
+}
+
+// ---------- редактирование и удаление ----------
+function startEditing(m) {
+  state.editing = m;
+  $("editPreview").textContent = m.message;
+  $("editBar").classList.remove("hidden");
+  field.value = m.message;
+  autosize();
+  field.focus();
+  field.setSelectionRange(field.value.length, field.value.length);
+  if (!state.searchQuery) renderMessages();
+}
+
+function stopEditing() {
+  if (!state.editing) return;
+  state.editing = null;
+  $("editBar").classList.add("hidden");
+  field.value = "";
+  autosize();
+  if (state.currentChat && !state.searchQuery) renderMessages();
+}
+$("editCancel").onclick = () => { stopEditing(); field.focus(); };
+
+async function saveEdit(text) {
+  const m = state.editing;
+  if (text === m.message) return stopEditing(); // ничего не поменяли
+  try {
+    const updated = await api("PATCH", `/chats/${m.chat_id}/messages/${m.id}`, { message: text });
+    stopEditing();
+    updateMessage(updated.chat_id, updated.id, { message: updated.message, edited_at: updated.edited_at });
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+async function deleteMessage(m) {
+  if (!confirm("Удалить сообщение? Собеседники увидят пометку «Сообщение удалено».")) return;
+  try {
+    await api("DELETE", `/chats/${m.chat_id}/messages/${m.id}`);
+    updateMessage(m.chat_id, m.id, { message: "", deleted: true, edited_at: null });
+  } catch (err) {
+    toast(err.message);
+  }
 }
 
 // ---------- поиск по сообщениям ----------
@@ -1384,6 +1528,13 @@ field.onkeydown = (e) => {
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     $("sendForm").requestSubmit();
+  } else if (e.key === "Escape" && state.editing) {
+    e.preventDefault();
+    stopEditing();
+  } else if (e.key === "ArrowUp" && !field.value && !state.editing && !state.searchQuery) {
+    // как в Telegram: стрелка вверх в пустом поле — изменить своё последнее сообщение
+    const last = state.messages.findLast((x) => x.user_id === state.me.id && !x.deleted);
+    if (last) { e.preventDefault(); startEditing(last); }
   }
 };
 
@@ -1391,6 +1542,7 @@ $("sendForm").onsubmit = async (e) => {
   e.preventDefault();
   const text = field.value.trim();
   if (!text || !state.currentChat) return;
+  if (state.editing) return saveEdit(text);
   field.value = "";
   autosize();
 
@@ -1432,7 +1584,16 @@ function connectWS() {
       toast(humanError(data.error));
       return;
     }
-    // data = { id, chat_id, user_id, message, created_at }
+    if (data.type === "message.edited") {
+      const m = data.message;
+      updateMessage(m.chat_id, m.id, { message: m.message, edited_at: m.edited_at });
+      return;
+    }
+    if (data.type === "message.deleted") {
+      updateMessage(data.chat_id, data.id, { message: "", deleted: true, edited_at: null });
+      return;
+    }
+    // новое сообщение: { id, chat_id, user_id, message, created_at }
     if (state.currentChat && data.chat_id === state.currentChat.id) {
       addIncoming(data);
     } else if (data.user_id !== state.me.id) {
