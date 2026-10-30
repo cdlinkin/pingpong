@@ -399,7 +399,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Сохраняет сообщение в чате. Отправитель должен быть участником чата. Для доставки собеседникам в реальном времени используйте WebSocket `/ws`.",
+                "description": "Сохраняет сообщение в чате. Отправитель должен быть участником чата. Чтобы ответить на сообщение, передайте `reply_to_id` (сообщение должно быть в этом же чате), тогда в ответе появится цитата `reply_to`. Для доставки собеседникам в реальном времени используйте WebSocket `/ws`.",
                 "consumes": [
                     "application/json"
                 ],
@@ -419,7 +419,7 @@
                         "required": true
                     },
                     {
-                        "description": "Текст сообщения (1–500 символов)",
+                        "description": "Текст сообщения (1–500 символов) и, если это ответ, reply_to_id",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -448,7 +448,7 @@
                         }
                     },
                     "404": {
-                        "description": "chat not found",
+                        "description": "chat not found / reply message not found",
                         "schema": {
                             "type": "string"
                         }
@@ -967,6 +967,46 @@
                     }
                 }
             }
+        },
+        "/ws": {
+            "get": {
+                "description": "Открывает WebSocket. Swagger UI не умеет подключаться к WebSocket: проверяйте в Postman (New → WebSocket) или через фронтенд.\n\n**Подключение:** `ws://localhost:8080/ws?token=\u003cJWT\u003e`. Токен передаётся в query, потому что браузер не может ставить заголовки при открытии WebSocket.\n\n**Клиент → сервер:** `{\"chat_id\": 13, \"message\": \"Привет!\"}` (модель WSIncomingMessage).\n\n**Сервер → клиент:** сохранённое сообщение (модель WSOutgoingMessage) рассылается всем участникам чата, которые сейчас онлайн, включая отправителя. Для него это подтверждение доставки.\n\n**Ошибки** приходят только отправителю: `{\"error\": \"bad json\"}`, `{\"error\": \"invalid message\"}`, `{\"error\": \"chat not found\"}`, `{\"error\": \"internal error\"}`.",
+                "tags": [
+                    "realtime"
+                ],
+                "summary": "WebSocket: сообщения в реальном времени",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "JWT из /login",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "description": "Формат сообщения клиента (отправляется по WebSocket, не в теле HTTP)",
+                        "name": "message",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/WSIncomingMessage"
+                        }
+                    }
+                ],
+                "responses": {
+                    "101": {
+                        "description": "Соединение переключено на WebSocket; так выглядят входящие сообщения",
+                        "schema": {
+                            "$ref": "#/definitions/WSOutgoingMessage"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1083,6 +1123,9 @@
                     "type": "string",
                     "example": "Привет!"
                 },
+                "reply_to": {
+                    "$ref": "#/definitions/Reply"
+                },
                 "user_id": {
                     "type": "integer",
                     "example": 38
@@ -1097,6 +1140,10 @@
                     "maxLength": 500,
                     "minLength": 1,
                     "example": "Привет!"
+                },
+                "reply_to_id": {
+                    "type": "integer",
+                    "example": 118
                 }
             }
         },
@@ -1106,6 +1153,85 @@
                 "last_read_message_id": {
                     "type": "integer",
                     "example": 120
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 39
+                }
+            }
+        },
+        "Reply": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 118
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Во сколько встречаемся?"
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 39
+                }
+            }
+        },
+        "WSIncomingMessage": {
+            "type": "object",
+            "properties": {
+                "chat_id": {
+                    "type": "integer",
+                    "example": 13
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Привет!"
+                },
+                "reply_to_id": {
+                    "type": "integer",
+                    "example": 118
+                }
+            }
+        },
+        "WSOutgoingMessage": {
+            "type": "object",
+            "properties": {
+                "chat_id": {
+                    "type": "integer",
+                    "example": 13
+                },
+                "created_at": {
+                    "type": "string",
+                    "example": "2026-10-28T18:34:54Z"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 120
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Привет!"
+                },
+                "reply_to": {
+                    "$ref": "#/definitions/WSReply"
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 38
+                }
+            }
+        },
+        "WSReply": {
+            "type": "object",
+            "properties": {
+                "id": {
+                    "type": "integer",
+                    "example": 118
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Во сколько встречаемся?"
                 },
                 "user_id": {
                     "type": "integer",
@@ -1202,4 +1328,4 @@
             "name": "realtime"
         }
     ]
-}
+}

@@ -29,6 +29,8 @@ type fakeRepo struct {
 	lastReadID int
 	markErr    error
 	readsCalls int
+
+	chatMessages map[int][]int // chatID -> id сообщений, на которые можно ответить
 }
 
 func (f *fakeRepo) IsMember(ctx context.Context, chatID, userID int) (bool, error) {
@@ -43,10 +45,20 @@ func (f *fakeRepo) IsMember(ctx context.Context, chatID, userID int) (bool, erro
 	return false, nil
 }
 
-func (f *fakeRepo) CreateMessage(ctx context.Context, chatID, userID int, message string) (MessageModel, error) {
-	m := MessageModel{ID: len(f.created) + 1, ChatID: chatID, UserID: userID, Message: message}
+func (f *fakeRepo) CreateMessage(ctx context.Context, chatID, userID int, message string, replyToID *int) (MessageModel, error) {
+	m := MessageModel{ID: len(f.created) + 1, ChatID: chatID, UserID: userID, Message: message, ReplyToID: replyToID}
 	f.created = append(f.created, m)
 	return m, nil
+}
+
+// MessageInChat: в чате chatID «лежат» сообщения с id из f.chatMessages
+func (f *fakeRepo) MessageInChat(ctx context.Context, chatID, msgID int) (bool, error) {
+	for _, id := range f.chatMessages[chatID] {
+		if id == msgID {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (f *fakeRepo) ListMessage(ctx context.Context, chatID, beforeID, limit int) ([]MessageModel, error) {
@@ -109,7 +121,7 @@ func TestSendMessage(t *testing.T) {
 
 	t.Run("ok, text is trimmed", func(t *testing.T) {
 		repo := newFakeRepo()
-		msg, err := NewService(repo).SendMessage(ctx, chatID, member, "  привет  ")
+		msg, err := NewService(repo).SendMessage(ctx, chatID, member, "  привет  ", nil)
 		if err != nil {
 			t.Fatalf("send: %v", err)
 		}
@@ -132,7 +144,7 @@ func TestSendMessage(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			repo := newFakeRepo()
-			_, err := NewService(repo).SendMessage(ctx, tt.chatID, tt.userID, tt.text)
+			_, err := NewService(repo).SendMessage(ctx, tt.chatID, tt.userID, tt.text, nil)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("want %v, got %v", tt.wantErr, err)
 			}
@@ -146,7 +158,7 @@ func TestSendMessage(t *testing.T) {
 		dbErr := errors.New("db down")
 		repo := newFakeRepo()
 		repo.isMemberErr = dbErr
-		_, err := NewService(repo).SendMessage(ctx, chatID, member, "hi")
+		_, err := NewService(repo).SendMessage(ctx, chatID, member, "hi", nil)
 		if !errors.Is(err, dbErr) {
 			t.Fatalf("want db error, got %v", err)
 		}
@@ -371,4 +383,45 @@ func TestListReads(t *testing.T) {
 			t.Fatal("marks must not be loaded for a stranger")
 		}
 	})
+}
+
+func TestSendMessageReply(t *testing.T) {
+	ctx := context.Background()
+	newRepo := func() *fakeRepo {
+		repo := newFakeRepo()
+		repo.chatMessages = map[int][]int{chatID: {5}, 99: {7}}
+		return repo
+	}
+	id := func(v int) *int { return &v }
+
+	t.Run("reply to message in same chat", func(t *testing.T) {
+		repo := newRepo()
+		msg, err := NewService(repo).SendMessage(ctx, chatID, member, "согласен", id(5))
+		if err != nil {
+			t.Fatalf("send: %v", err)
+		}
+		if msg.ReplyToID == nil || *msg.ReplyToID != 5 {
+			t.Fatalf("want reply_to 5, got %v", msg.ReplyToID)
+		}
+	})
+
+	tests := []struct {
+		name    string
+		replyTo *int
+	}{
+		{"message from another chat", id(7)},
+		{"message does not exist", id(12345)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newRepo()
+			_, err := NewService(repo).SendMessage(ctx, chatID, member, "hi", tt.replyTo)
+			if !errors.Is(err, ErrMessageNotFound) {
+				t.Fatalf("want ErrMessageNotFound, got %v", err)
+			}
+			if len(repo.created) != 0 {
+				t.Fatal("message must not be saved")
+			}
+		})
+	}
 }
