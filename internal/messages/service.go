@@ -8,7 +8,7 @@ import (
 
 type repository interface {
 	IsMember(ctx context.Context, chatID, userID int) (bool, error)
-	CreateMessage(ctx context.Context, chatID, userID int, message string) (MessageModel, error)
+	CreateMessage(ctx context.Context, chatID, userID int, message string, replyToID *int) (MessageModel, error)
 	ListMessage(ctx context.Context, chatID, beforeID, limit int) ([]MessageModel, error)
 	SearchMessages(ctx context.Context, chatID int, query string) ([]MessageModel, error)
 	ListMemberIDs(ctx context.Context, chatID int) ([]int, error)
@@ -16,6 +16,7 @@ type repository interface {
 	DeleteMessage(ctx context.Context, chatID, msgID, userID int) error
 	MarkRead(ctx context.Context, chatID, userID, msgID int) (int, error)
 	ListReads(ctx context.Context, chatID int) ([]ReadModel, error)
+	MessageInChat(ctx context.Context, chatID, msgID int) (bool, error)
 }
 
 type Service struct {
@@ -32,6 +33,7 @@ func (s *Service) SendMessage(
 	ctx context.Context,
 	chatID, userID int,
 	msg string,
+	replyToID *int,
 ) (MessageModel, error) {
 	msg, err := validateMsg(msg)
 	if err != nil {
@@ -55,7 +57,23 @@ func (s *Service) SendMessage(
 		)
 	}
 
-	msgModel, err := s.repository.CreateMessage(ctx, chatID, userID, msg)
+	if replyToID != nil {
+		ok, err := s.repository.MessageInChat(ctx, chatID, *replyToID)
+		if err != nil {
+			return MessageModel{}, fmt.Errorf(
+				"message in chat: %w",
+				err,
+			)
+		}
+		if !ok {
+			return MessageModel{}, fmt.Errorf(
+				"reply target not in chat: %w",
+				ErrMessageNotFound,
+			)
+		}
+	}
+
+	msgModel, err := s.repository.CreateMessage(ctx, chatID, userID, msg, replyToID)
 	if err != nil {
 		return MessageModel{}, fmt.Errorf(
 			"create message: %w",

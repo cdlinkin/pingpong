@@ -30,17 +30,17 @@ func NewHandler(service *Service, notifier Notifier) *Handler {
 // SendMessage godoc
 //
 //	@Summary		Отправить сообщение (HTTP)
-//	@Description	Сохраняет сообщение в чате. Отправитель должен быть участником чата. Для доставки собеседникам в реальном времени используйте WebSocket `/ws`.
+//	@Description	Сохраняет сообщение в чате. Отправитель должен быть участником чата. Чтобы ответить на сообщение, передайте `reply_to_id` (сообщение должно быть в этом же чате), тогда в ответе появится цитата `reply_to`. Для доставки собеседникам в реальном времени используйте WebSocket `/ws`.
 //	@Tags			messages
 //	@Accept			json
 //	@Produce		json
 //	@Security		BearerAuth
 //	@Param			id		path		int			true	"ID чата"
-//	@Param			request	body		msgRequest	true	"Текст сообщения (1–500 символов)"
+//	@Param			request	body		msgRequest	true	"Текст сообщения (1–500 символов) и, если это ответ, reply_to_id"
 //	@Success		201		{object}	msgResponse	"Сообщение сохранено"
 //	@Failure		400		{string}	string		"message must be 1-500 symbols"
 //	@Failure		401		{string}	string		"invalid token"
-//	@Failure		404		{string}	string		"chat not found"
+//	@Failure		404		{string}	string		"chat not found / reply message not found"
 //	@Failure		500		{string}	string		"internal error"
 //	@Router			/chats/{id}/messages [post]
 func (h *Handler) SendMessage(rw http.ResponseWriter, r *http.Request) {
@@ -75,13 +75,15 @@ func (h *Handler) SendMessage(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg, err := h.service.SendMessage(r.Context(), chatID, userID, req.Message)
+	msg, err := h.service.SendMessage(r.Context(), chatID, userID, req.Message, req.ReplyToID)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrInvalidInput):
 			http.Error(rw, "message must be 1-500 symbols", http.StatusBadRequest)
 		case errors.Is(err, ErrChatNotFound):
 			http.Error(rw, "chat not found", http.StatusNotFound)
+		case errors.Is(err, ErrMessageNotFound):
+			http.Error(rw, "reply message not found", http.StatusNotFound)
 		default:
 			log.Printf("send message: %v", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
@@ -89,13 +91,7 @@ func (h *Handler) SendMessage(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := msgResponse{
-		ID:        msg.ID,
-		ChatID:    msg.ChatID,
-		UserID:    msg.UserID,
-		Message:   msg.Message,
-		CreatedAt: msg.CreatedAt,
-	}
+	response := toResponse(msg)
 
 	rw.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
@@ -164,17 +160,8 @@ func (h *Handler) ListMessage(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	response := make([]msgResponse, 0, len(messages))
-	for _, msg := range messages {
-		response = append(response,
-			msgResponse{
-				ID:        msg.ID,
-				ChatID:    msg.ChatID,
-				UserID:    msg.UserID,
-				Message:   msg.Message,
-				CreatedAt: msg.CreatedAt,
-				EditedAt:  msg.EditedAt,
-				Deleted:   msg.DeletedAt != nil,
-			})
+	for _, m := range messages {
+		response = append(response, toResponse(m))
 	}
 
 	rw.WriteHeader(http.StatusOK)
@@ -231,14 +218,7 @@ func (h *Handler) SearchMessages(rw http.ResponseWriter, r *http.Request) {
 
 	response := make([]msgResponse, 0, len(messages))
 	for _, m := range messages {
-		response = append(response,
-			msgResponse{
-				ID:        m.ID,
-				ChatID:    m.ChatID,
-				UserID:    m.UserID,
-				Message:   m.Message,
-				CreatedAt: m.CreatedAt,
-			})
+		response = append(response, toResponse(m))
 	}
 
 	rw.WriteHeader(http.StatusOK)
@@ -589,4 +569,25 @@ func (h *Handler) ListReads(rw http.ResponseWriter, r *http.Request) {
 		log.Printf("list reads: encode response: %v", err)
 		return
 	}
+}
+
+func toResponse(m MessageModel) msgResponse {
+	response := msgResponse{
+		ID:        m.ID,
+		ChatID:    m.ChatID,
+		UserID:    m.UserID,
+		Message:   m.Message,
+		CreatedAt: m.CreatedAt,
+		EditedAt:  m.EditedAt,
+		Deleted:   m.DeletedAt != nil,
+	}
+
+	if m.ReplyToID != nil && m.ReplyUserID != nil && m.ReplyMessage != nil {
+		response.ReplyTo = &replyResponse{
+			ID:      *m.ReplyToID,
+			UserID:  *m.ReplyUserID,
+			Message: *m.ReplyMessage,
+		}
+	}
+	return response
 }

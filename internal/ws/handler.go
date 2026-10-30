@@ -96,9 +96,12 @@ func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 			in.ChatID,
 			id,
 			in.Message,
+			in.ReplyToID,
 		)
 		if err != nil {
 			switch {
+			case errors.Is(err, messages.ErrMessageNotFound):
+				trySend(client, []byte(`{"error":"reply message not found"}`))
 			case errors.Is(err, messages.ErrInvalidInput):
 				trySend(client, []byte(`{"error":"invalid message"}`))
 			case errors.Is(err, messages.ErrChatNotFound):
@@ -115,6 +118,14 @@ func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 			UserID:    msgDomain.UserID,
 			Message:   msgDomain.Message,
 			CreatedAt: msgDomain.CreatedAt,
+		}
+
+		if msgDomain.ReplyToID != nil && msgDomain.ReplyUserID != nil && msgDomain.ReplyMessage != nil {
+			response.ReplyTo = &replyOut{
+				ID:      *msgDomain.ReplyToID,
+				UserID:  *msgDomain.ReplyUserID,
+				Message: *msgDomain.ReplyMessage,
+			}
 		}
 		data, err = json.Marshal(response)
 		if err != nil {

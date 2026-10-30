@@ -45,18 +45,53 @@ func (r *Repository) IsMember(
 	return ok, nil
 }
 
+func (r *Repository) MessageInChat(
+	ctx context.Context,
+	chatID, msgID int,
+) (bool, error) {
+	query := `
+	SELECT EXISTS 
+	(SELECT 1 
+	FROM messages 
+	WHERE id = $1 AND chat_id = $2);	
+	`
+
+	var ok bool
+	if err := r.pool.QueryRow(
+		ctx,
+		query,
+		msgID,
+		chatID,
+	).Scan(&ok); err != nil {
+		return false, fmt.Errorf(
+			"message in chat: %w",
+			err,
+		)
+	}
+
+	return ok, nil
+}
+
 func (r *Repository) CreateMessage(
 	ctx context.Context,
 	chatID, userID int,
 	message string,
+	replyToID *int,
 ) (MessageModel, error) {
 	query := `
-	INSERT INTO messages (chat_id, user_id, message)
-	VALUES ($1,$2,$3)
-	RETURNING id, chat_id, user_id, message, created_at;
+	WITH ins AS (
+    INSERT INTO messages (chat_id, user_id, message, reply_to_id)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id, chat_id, user_id, message, created_at, reply_to_id
+	)
+	SELECT ins.id, ins.chat_id, ins.user_id, ins.message, ins.created_at,
+	ins.reply_to_id, r.user_id,
+	CASE WHEN r.deleted_at IS NULL THEN r.message ELSE '' END
+	FROM ins
+	LEFT JOIN messages r ON r.id = ins.reply_to_id;
 	`
 
-	row := r.pool.QueryRow(ctx, query, chatID, userID, message)
+	row := r.pool.QueryRow(ctx, query, chatID, userID, message, replyToID)
 
 	var messageModel MessageModel
 
@@ -66,6 +101,9 @@ func (r *Repository) CreateMessage(
 		&messageModel.UserID,
 		&messageModel.Message,
 		&messageModel.CreatedAt,
+		&messageModel.ReplyToID,
+		&messageModel.ReplyUserID,
+		&messageModel.ReplyMessage,
 	); err != nil {
 		return MessageModel{}, fmt.Errorf(
 			"create message: %w",
@@ -81,12 +119,13 @@ func (r *Repository) ListMessage(
 	beforeID, limit int,
 ) ([]MessageModel, error) {
 	query := `
-	SELECT m.id, m.chat_id, m.user_id, 
-	CASE 
-	WHEN m.deleted_at 
-	IS NULL THEN m.message 
-	ELSE '' END AS message, m.created_at, m.edited_at, m.deleted_at
+	SELECT m.id, m.chat_id, m.user_id,
+	CASE WHEN m.deleted_at IS NULL THEN m.message ELSE '' END AS message,
+	m.created_at, m.edited_at, m.deleted_at,
+	m.reply_to_id, r.user_id,
+	CASE WHEN r.deleted_at IS NULL THEN r.message ELSE '' END
 	FROM messages AS m
+	LEFT JOIN messages AS r ON r.id = m.reply_to_id
 	WHERE m.chat_id = $1 AND m.id < $2
 	ORDER BY m.id DESC
 	LIMIT $3;
@@ -112,6 +151,9 @@ func (r *Repository) ListMessage(
 			&m.CreatedAt,
 			&m.EditedAt,
 			&m.DeletedAt,
+			&m.ReplyToID,
+			&m.ReplyUserID,
+			&m.ReplyMessage,
 		); err != nil {
 			return nil, fmt.Errorf(
 				"scan message: %w",

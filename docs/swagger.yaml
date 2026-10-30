@@ -80,6 +80,8 @@ definitions:
       message:
         example: Привет!
         type: string
+      reply_to:
+        $ref: '#/definitions/Reply'
       user_id:
         example: 38
         type: integer
@@ -91,12 +93,71 @@ definitions:
         maxLength: 500
         minLength: 1
         type: string
+      reply_to_id:
+        example: 118
+        type: integer
     type: object
   ReadMark:
     properties:
       last_read_message_id:
         example: 120
         type: integer
+      user_id:
+        example: 39
+        type: integer
+    type: object
+  Reply:
+    properties:
+      id:
+        example: 118
+        type: integer
+      message:
+        example: Во сколько встречаемся?
+        type: string
+      user_id:
+        example: 39
+        type: integer
+    type: object
+  WSIncomingMessage:
+    properties:
+      chat_id:
+        example: 13
+        type: integer
+      message:
+        example: Привет!
+        type: string
+      reply_to_id:
+        example: 118
+        type: integer
+    type: object
+  WSOutgoingMessage:
+    properties:
+      chat_id:
+        example: 13
+        type: integer
+      created_at:
+        example: "2026-10-28T18:34:54Z"
+        type: string
+      id:
+        example: 120
+        type: integer
+      message:
+        example: Привет!
+        type: string
+      reply_to:
+        $ref: '#/definitions/WSReply'
+      user_id:
+        example: 38
+        type: integer
+    type: object
+  WSReply:
+    properties:
+      id:
+        example: 118
+        type: integer
+      message:
+        example: Во сколько встречаемся?
+        type: string
       user_id:
         example: 39
         type: integer
@@ -324,14 +385,16 @@ paths:
       consumes:
       - application/json
       description: Сохраняет сообщение в чате. Отправитель должен быть участником
-        чата. Для доставки собеседникам в реальном времени используйте WebSocket `/ws`.
+        чата. Чтобы ответить на сообщение, передайте `reply_to_id` (сообщение должно
+        быть в этом же чате), тогда в ответе появится цитата `reply_to`. Для доставки
+        собеседникам в реальном времени используйте WebSocket `/ws`.
       parameters:
       - description: ID чата
         in: path
         name: id
         required: true
         type: integer
-      - description: Текст сообщения (1–500 символов)
+      - description: Текст сообщения (1–500 символов) и, если это ответ, reply_to_id
         in: body
         name: request
         required: true
@@ -353,7 +416,7 @@ paths:
           schema:
             type: string
         "404":
-          description: chat not found
+          description: chat not found / reply message not found
           schema:
             type: string
         "500":
@@ -790,6 +853,43 @@ paths:
       summary: Регистрация
       tags:
       - auth
+  /ws:
+    get:
+      description: |-
+        Открывает WebSocket. Swagger UI не умеет подключаться к WebSocket: проверяйте в Postman (New → WebSocket) или через фронтенд.
+
+        **Подключение:** `ws://localhost:8080/ws?token=<JWT>`. Токен передаётся в query, потому что браузер не может ставить заголовки при открытии WebSocket.
+
+        **Клиент → сервер:** `{"chat_id": 13, "message": "Привет!"}` (модель WSIncomingMessage).
+
+        **Сервер → клиент:** сохранённое сообщение (модель WSOutgoingMessage) рассылается всем участникам чата, которые сейчас онлайн, включая отправителя. Для него это подтверждение доставки.
+
+        **Ошибки** приходят только отправителю: `{"error": "bad json"}`, `{"error": "invalid message"}`, `{"error": "chat not found"}`, `{"error": "internal error"}`.
+      parameters:
+      - description: JWT из /login
+        in: query
+        name: token
+        required: true
+        type: string
+      - description: Формат сообщения клиента (отправляется по WebSocket, не в теле
+          HTTP)
+        in: body
+        name: message
+        schema:
+          $ref: '#/definitions/WSIncomingMessage'
+      responses:
+        "101":
+          description: Соединение переключено на WebSocket; так выглядят входящие
+            сообщения
+          schema:
+            $ref: '#/definitions/WSOutgoingMessage'
+        "401":
+          description: invalid token
+          schema:
+            type: string
+      summary: 'WebSocket: сообщения в реальном времени'
+      tags:
+      - realtime
 schemes:
 - http
 securityDefinitions:
