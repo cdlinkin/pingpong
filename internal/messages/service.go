@@ -17,6 +17,9 @@ type repository interface {
 	MarkRead(ctx context.Context, chatID, userID, msgID int) (int, error)
 	ListReads(ctx context.Context, chatID int) ([]ReadModel, error)
 	MessageInChat(ctx context.Context, chatID, msgID int) (bool, error)
+	RemoveReaction(ctx context.Context, msgID, userID int, emoji string) (bool, error)
+	UpsertReaction(ctx context.Context, msgID, userID int, emoji string) error
+	ListReactions(ctx context.Context, msgIDs []int) ([]ReactionModel, error)
 }
 
 type Service struct {

@@ -19,3 +19,9 @@ type ReadModel struct {
 	UserID     int
 	LastReadID int
 }
+
+type ReactionModel struct {
+	MsgID  int
+	UserID int
+	Emoji  string
+}
