@@ -6,15 +6,18 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	_ "github.com/cdlinkin/pingpong/docs"
 	"github.com/cdlinkin/pingpong/internal/auth"
 	"github.com/cdlinkin/pingpong/internal/chats"
 	"github.com/cdlinkin/pingpong/internal/messages"
+	"github.com/cdlinkin/pingpong/internal/ratelimit"
 	"github.com/cdlinkin/pingpong/internal/ws"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
+	"golang.org/x/time/rate"
 )
 
 type Response struct {
@@ -116,8 +119,6 @@ func main() {
 	msgService := messages.NewService(msgRepo)
 	msgHandler := messages.NewHandler(msgService, wsHub)
 
-	wsHandler := ws.NewHandler([]byte(jwtSecret), wsHub, msgService)
-
 	mux := http.NewServeMux()
 
 	mux.Handle("GET /swagger/", httpSwagger.Handler(
@@ -125,25 +126,35 @@ func main() {
 		httpSwagger.PersistAuthorization(true),
 	))
 
-	mux.Handle("GET /me", middleware.Auth(http.HandlerFunc(handler.Me)))
-	mux.HandleFunc("/login", handler.Login)
-	mux.HandleFunc("/register", handler.Register)
+	authLimit := ratelimit.New(rate.Every(12*time.Second), 5)
+	userLimit := ratelimit.New(10, 20)
+	wsLimit := ratelimit.New(5, 10)
+
+	wsHandler := ws.NewHandler([]byte(jwtSecret), wsHub, msgService, wsLimit)
+
+	protected := func(h http.HandlerFunc) http.Handler {
+		return middleware.Auth(userLimit.ByUser(h))
+	}
+
+	mux.Handle("GET /me", protected(handler.Me))
+	mux.Handle("/login", authLimit.ByIP(http.HandlerFunc(handler.Login)))
+	mux.Handle("/register", authLimit.ByIP(http.HandlerFunc(handler.Register)))
 	mux.HandleFunc("/health", health)
-	mux.Handle("POST /chats/group", middleware.Auth(http.HandlerFunc(chatsHandler.CreateGroupChat)))
-	mux.Handle("POST /chats/direct", middleware.Auth(http.HandlerFunc(chatsHandler.CreateDirectChat)))
-	mux.Handle("GET /chats", middleware.Auth(http.HandlerFunc(chatsHandler.ListUserChats)))
-	mux.Handle("POST /chats/{id}/members", middleware.Auth(http.HandlerFunc(chatsHandler.AddMember)))
-	mux.Handle("DELETE /chats/{id}/members/{userID}", middleware.Auth(http.HandlerFunc(chatsHandler.RemoveMember)))
-	mux.Handle("POST /chats/{id}/messages", middleware.Auth(http.HandlerFunc(msgHandler.SendMessage)))
-	mux.Handle("GET /chats/{id}/messages", middleware.Auth(http.HandlerFunc(msgHandler.ListMessage)))
-	mux.Handle("GET /chats/{id}/messages/search", middleware.Auth(http.HandlerFunc(msgHandler.SearchMessages)))
+	mux.Handle("POST /chats/group", protected(chatsHandler.CreateGroupChat))
+	mux.Handle("POST /chats/direct", protected(chatsHandler.CreateDirectChat))
+	mux.Handle("GET /chats", protected(chatsHandler.ListUserChats))
+	mux.Handle("POST /chats/{id}/members", protected(chatsHandler.AddMember))
+	mux.Handle("DELETE /chats/{id}/members/{userID}", protected(chatsHandler.RemoveMember))
+	mux.Handle("POST /chats/{id}/messages", protected(msgHandler.SendMessage))
+	mux.Handle("GET /chats/{id}/messages", protected(msgHandler.ListMessage))
+	mux.Handle("GET /chats/{id}/messages/search", protected(msgHandler.SearchMessages))
 	mux.HandleFunc("GET /ws", wsHandler.ServeWS)
 	mux.HandleFunc("GET /{$}", index)
-	mux.Handle("PATCH /chats/{id}/messages/{msgID}", middleware.Auth(http.HandlerFunc(msgHandler.EditMessage)))
-	mux.Handle("DELETE /chats/{id}/messages/{msgID}", middleware.Auth(http.HandlerFunc(msgHandler.DeleteMessage)))
-	mux.Handle("POST /chats/{id}/read", middleware.Auth(http.HandlerFunc(msgHandler.MarkRead)))
-	mux.Handle("GET /chats/{id}/reads", middleware.Auth(http.HandlerFunc(msgHandler.ListReads)))
-	mux.Handle("POST /chats/{id}/messages/{msgID}/reactions", middleware.Auth(http.HandlerFunc(msgHandler.ToggleReaction)))
+	mux.Handle("PATCH /chats/{id}/messages/{msgID}", protected(msgHandler.EditMessage))
+	mux.Handle("DELETE /chats/{id}/messages/{msgID}", protected(msgHandler.DeleteMessage))
+	mux.Handle("POST /chats/{id}/read", protected(msgHandler.MarkRead))
+	mux.Handle("GET /chats/{id}/reads", protected(msgHandler.ListReads))
+	mux.Handle("POST /chats/{id}/messages/{msgID}/reactions", protected(msgHandler.ToggleReaction))
 
 	if err := http.ListenAndServe(":8080", mux); err != nil {
 		log.Fatalf("error to run server: %v", err)

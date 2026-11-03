@@ -5,9 +5,11 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/cdlinkin/pingpong/internal/auth"
 	"github.com/cdlinkin/pingpong/internal/messages"
+	"github.com/cdlinkin/pingpong/internal/ratelimit"
 	"github.com/gorilla/websocket"
 )
 
@@ -15,17 +17,20 @@ type Handler struct {
 	secret     []byte
 	hub        *Hub
 	msgService *messages.Service
+	limit      *ratelimit.Limiter
 }
 
 func NewHandler(
 	secret []byte,
 	hub *Hub,
 	msgService *messages.Service,
+	limit *ratelimit.Limiter,
 ) *Handler {
 	return &Handler{
 		secret:     secret,
 		hub:        hub,
 		msgService: msgService,
+		limit:      limit,
 	}
 }
 
@@ -85,6 +90,11 @@ func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("ws: user %d disconnected: %v", id, err)
 			return
+		}
+
+		if !h.limit.Allow(strconv.Itoa(id)) {
+			trySend(client, []byte(`{"error":"too many requests"}`))
+			continue
 		}
 
 		if err := json.Unmarshal(data, &in); err != nil {
