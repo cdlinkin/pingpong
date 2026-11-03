@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 )
@@ -13,13 +13,14 @@ func Run(
 	ctx context.Context,
 	server *http.Server,
 	shutdownTimeout time.Duration,
+	logger *slog.Logger,
 ) error {
 	ch := make(chan error, 1)
 
 	go func() {
 		defer close(ch)
 
-		log.Printf("start HTTP server")
+		logger.Info("start HTTP server", "addr", server.Addr)
 
 		err := server.ListenAndServe()
 
@@ -37,7 +38,7 @@ func Run(
 			)
 		}
 	case <-ctx.Done():
-		log.Printf("shutdown server...")
+		logger.Info("shutdown server...")
 
 		shutdownCtx, cancel := context.WithTimeout(
 			context.Background(),
@@ -54,7 +55,7 @@ func Run(
 			)
 		}
 
-		log.Printf("HTTP server stopped")
+		logger.Info("HTTP server stopped")
 	}
 
 	return nil

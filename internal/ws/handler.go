@@ -3,7 +3,7 @@ package ws
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -18,6 +18,7 @@ type Handler struct {
 	hub        *Hub
 	msgService *messages.Service
 	limit      *ratelimit.Limiter
+	logger     *slog.Logger
 }
 
 func NewHandler(
@@ -25,12 +26,14 @@ func NewHandler(
 	hub *Hub,
 	msgService *messages.Service,
 	limit *ratelimit.Limiter,
+	logger *slog.Logger,
 ) *Handler {
 	return &Handler{
 		secret:     secret,
 		hub:        hub,
 		msgService: msgService,
 		limit:      limit,
+		logger:     logger,
 	}
 }
 
@@ -67,10 +70,10 @@ func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 
 	conn, err := upgrader.Upgrade(rw, r, nil)
 	if err != nil {
-		log.Printf("upgrader conn")
+		h.logger.Warn("ws: upgrade", "user_id", id, "err", err)
 		return
 	}
-	log.Printf("ws: user %d connected", id)
+	h.logger.Info("ws: connected", "user_id", id)
 	defer conn.Close()
 
 	client := &Client{
@@ -82,23 +85,23 @@ func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 	h.hub.Register(client)
 	defer h.hub.Unregister(client)
 
-	go writePump(client)
+	go h.writePump(client)
 
 	for {
 		var in incomingMessage
 		_, data, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("ws: user %d disconnected: %v", id, err)
+			h.logger.Info("ws: disconnected", "user_id", id, "reason", err)
 			return
 		}
 
 		if !h.limit.Allow(strconv.Itoa(id)) {
-			trySend(client, []byte(`{"error":"too many requests"}`))
+			h.trySend(client, []byte(`{"error":"too many requests"}`))
 			continue
 		}
 
 		if err := json.Unmarshal(data, &in); err != nil {
-			trySend(client, []byte(`{"error":"bad json"}`))
+			h.trySend(client, []byte(`{"error":"bad json"}`))
 			continue
 		}
 		msgDomain, err := h.msgService.SendMessage(
@@ -111,14 +114,14 @@ func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			switch {
 			case errors.Is(err, messages.ErrMessageNotFound):
-				trySend(client, []byte(`{"error":"reply message not found"}`))
+				h.trySend(client, []byte(`{"error":"reply message not found"}`))
 			case errors.Is(err, messages.ErrInvalidInput):
-				trySend(client, []byte(`{"error":"invalid message"}`))
+				h.trySend(client, []byte(`{"error":"invalid message"}`))
 			case errors.Is(err, messages.ErrChatNotFound):
-				trySend(client, []byte(`{"error":"chat not found"}`))
+				h.trySend(client, []byte(`{"error":"chat not found"}`))
 			default:
-				log.Printf("ws: send message: %v", err)
-				trySend(client, []byte(`{"error":"internal error"}`))
+				h.logger.Error("ws: send message", "user_id", id, "err", err)
+				h.trySend(client, []byte(`{"error":"internal error"}`))
 			}
 			continue
 		}
@@ -139,14 +142,14 @@ func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 		}
 		data, err = json.Marshal(response)
 		if err != nil {
-			log.Printf("ws: marshal response: %v", err)
-			trySend(client, []byte(`{"error":"internal error"}`))
+			h.logger.Error("ws: marshal response", "err", err)
+			h.trySend(client, []byte(`{"error":"internal error"}`))
 			continue
 		}
 		ids, err := h.msgService.ListMemberIDs(r.Context(), msgDomain.ChatID)
 		if err != nil {
-			log.Printf("ws: list member ids: %v", err)
-			trySend(client, []byte(`{"error":"internal error"}`))
+			h.logger.Error("ws: list member ids", "chat_id", msgDomain.ChatID, "err", err)
+			h.trySend(client, []byte(`{"error":"internal error"}`))
 			continue
 		}
 		for _, memberID := range ids {
@@ -155,18 +158,18 @@ func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func trySend(c *Client, data []byte) {
+func (h *Handler) trySend(c *Client, data []byte) {
 	select {
 	case c.Send <- data:
 	default:
-		log.Printf("ws: user %d send buffer full, drop message", c.UserID)
+		h.logger.Warn("ws: send buffer full, drop message", "user_id", c.UserID)
 	}
 }
 
-func writePump(c *Client) {
+func (h *Handler) writePump(c *Client) {
 	for data := range c.Send {
 		if err := c.Conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			log.Printf("client write message: %v", err)
+			h.logger.Warn("ws: write message", "user_id", c.UserID, "err", err)
 			c.Conn.Close()
 			return
 		}

@@ -6,6 +6,8 @@ services:
     environment:
       - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pingpong-postgres:5432/${POSTGRES_DB}?sslmode=disable
       - JWT_SECRET=${JWT_SECRET}
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json
     ports:
       - "8080:8080"
     depends_on:

@@ -3,17 +3,19 @@ package auth
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
 type Handler struct {
 	service *Service
+	logger  *slog.Logger
 }
 
-func NewHandler(service *Service) *Handler {
+func NewHandler(service *Service, logger *slog.Logger) *Handler {
 	return &Handler{
 		service: service,
+		logger:  logger,
 	}
 }
 
@@ -53,7 +55,7 @@ func (h *Handler) Register(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrUserExists):
 			http.Error(rw, "user already exists", http.StatusConflict)
 		default:
-			log.Printf("register: %v", err)
+			h.logger.Error("register", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -65,7 +67,7 @@ func (h *Handler) Register(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("register: encode response: %v", err)
+		h.logger.Warn("register: encode response", "err", err)
 		return
 	}
 }
@@ -106,7 +108,7 @@ func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrInvalidCredentials):
 			http.Error(rw, "invalid email or password", http.StatusUnauthorized)
 		default:
-			log.Printf("login: %v", err)
+			h.logger.Error("login", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -118,7 +120,7 @@ func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("login: encode response: %v", err)
+		h.logger.Warn("login: encode response", "err", err)
 		return
 	}
 }
@@ -154,7 +156,7 @@ func (h *Handler) Me(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrUserNotFound):
 			http.Error(rw, "user not found", http.StatusNotFound)
 		default:
-			log.Printf("me: %v", err)
+			h.logger.Error("me", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -169,7 +171,7 @@ func (h *Handler) Me(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("me: encode response: %v", err)
+		h.logger.Warn("me: encode response", "err", err)
 		return
 	}
 }

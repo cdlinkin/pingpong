@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +13,7 @@ import (
 	_ "github.com/cdlinkin/pingpong/docs"
 	"github.com/cdlinkin/pingpong/internal/auth"
 	"github.com/cdlinkin/pingpong/internal/chats"
+	"github.com/cdlinkin/pingpong/internal/logging"
 	"github.com/cdlinkin/pingpong/internal/messages"
 	"github.com/cdlinkin/pingpong/internal/ratelimit"
 	"github.com/cdlinkin/pingpong/internal/server"
@@ -53,7 +54,7 @@ func health(rw http.ResponseWriter, r *http.Request) {
 	rw.WriteHeader(http.StatusOK)
 
 	if err := json.NewEncoder(rw).Encode(res); err != nil {
-		log.Printf("health: encode response: %v", err)
+		slog.Warn("health: encode response", "err", err)
 		return
 	}
 }
@@ -85,43 +86,55 @@ func health(rw http.ResponseWriter, r *http.Request) {
 // @name						Authorization
 // @description				JWT из POST /login. Формат: `Bearer <token>`
 func main() {
-	if err := godotenv.Load(); err != nil {
-		log.Printf("no .env file, using environment variables: %v", err)
-	}
+	envErr := godotenv.Load()
 	url := os.Getenv("DATABASE_URL")
+
+	logger := logging.New(
+		os.Getenv("LOG_LEVEL"),
+		os.Getenv("LOG_FORMAT"),
+	)
+
+	slog.SetDefault(logger)
+
+	if envErr != nil {
+		logger.Info("no .env file, using environment variables")
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
 	pool, err := pgxpool.New(ctx, url)
 	if err != nil {
-		log.Fatalf("pgx pool: %v", err)
+		logger.Error("pgx pool", "err", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
 	if err := pool.Ping(ctx); err != nil {
-		log.Fatalf("pool ping: %v", err)
+		logger.Error("pool ping", "err", err)
+		os.Exit(1)
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		log.Fatalf("env no set")
+		logger.Error("JWT_SECRET is not set")
+		os.Exit(1)
 	}
 
 	repo := auth.NewRepository(pool)
 	service := auth.NewService(repo, []byte(jwtSecret))
-	handler := auth.NewHandler(service)
+	handler := auth.NewHandler(service, logger)
 	middleware := auth.NewMiddleware([]byte(jwtSecret))
 
 	chatsRepo := chats.NewRepository(pool)
 	chatsService := chats.NewService(chatsRepo)
-	chatsHandler := chats.NewHandler(chatsService)
+	chatsHandler := chats.NewHandler(chatsService, logger)
 
 	wsHub := ws.NewHub()
 
 	msgRepo := messages.NewRepository(pool)
 	msgService := messages.NewService(msgRepo)
-	msgHandler := messages.NewHandler(msgService, wsHub)
+	msgHandler := messages.NewHandler(msgService, wsHub, logger)
 
 	mux := http.NewServeMux()
 
@@ -134,7 +147,7 @@ func main() {
 	userLimit := ratelimit.New(10, 20)
 	wsLimit := ratelimit.New(5, 10)
 
-	wsHandler := ws.NewHandler([]byte(jwtSecret), wsHub, msgService, wsLimit)
+	wsHandler := ws.NewHandler([]byte(jwtSecret), wsHub, msgService, wsLimit, logger)
 
 	protected := func(h http.HandlerFunc) http.Handler {
 		return middleware.Auth(userLimit.ByUser(h))
@@ -162,7 +175,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              ":8080",
-		Handler:           mux,
+		Handler:           logging.Middleware(logger, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -172,10 +185,8 @@ func main() {
 		ctx,
 		srv,
 		10*time.Second,
+		logger,
 	); err != nil {
-		log.Printf(
-			"server: %v",
-			err,
-		)
+		logger.Error("server", "err", err)
 	}
 }

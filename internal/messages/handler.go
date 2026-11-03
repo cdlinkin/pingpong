@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -18,12 +18,14 @@ type Notifier interface {
 type Handler struct {
 	service  *Service
 	notifier Notifier
+	logger   *slog.Logger
 }
 
-func NewHandler(service *Service, notifier Notifier) *Handler {
+func NewHandler(service *Service, notifier Notifier, logger *slog.Logger) *Handler {
 	return &Handler{
 		service:  service,
 		notifier: notifier,
+		logger:   logger,
 	}
 }
 
@@ -85,7 +87,7 @@ func (h *Handler) SendMessage(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrMessageNotFound):
 			http.Error(rw, "reply message not found", http.StatusNotFound)
 		default:
-			log.Printf("send message: %v", err)
+			h.logger.Error("send message", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -95,7 +97,7 @@ func (h *Handler) SendMessage(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("send message: encode response: %v", err)
+		h.logger.Warn("send message: encode response", "err", err)
 		return
 	}
 }
@@ -153,7 +155,7 @@ func (h *Handler) ListMessage(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrChatNotFound):
 			http.Error(rw, "chat not found", http.StatusNotFound)
 		default:
-			log.Printf("list message: %v", err)
+			h.logger.Error("list message", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -166,7 +168,7 @@ func (h *Handler) ListMessage(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("list messages: encode response: %v", err)
+		h.logger.Warn("list message: encode response", "err", err)
 		return
 	}
 }
@@ -210,7 +212,7 @@ func (h *Handler) SearchMessages(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrChatNotFound):
 			http.Error(rw, "chat not found", http.StatusNotFound)
 		default:
-			log.Printf("search message: %v", err)
+			h.logger.Error("search message", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -223,7 +225,7 @@ func (h *Handler) SearchMessages(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("search messages: encode response: %v", err)
+		h.logger.Warn("search message: encode response", "err", err)
 		return
 	}
 }
@@ -303,7 +305,7 @@ func (h *Handler) EditMessage(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrMessageNotFound):
 			http.Error(rw, "message not found", http.StatusNotFound)
 		default:
-			log.Printf("edit message: %v", err)
+			h.logger.Error("edit message", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -329,7 +331,7 @@ func (h *Handler) EditMessage(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("edit message: encode response: %v", err)
+		h.logger.Warn("edit message: encode response", "err", err)
 		return
 	}
 }
@@ -409,7 +411,7 @@ func (h *Handler) ToggleReaction(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrMessageNotFound):
 			http.Error(rw, "message not found", http.StatusNotFound)
 		default:
-			log.Printf("toggle reaction: %v", err)
+			h.logger.Error("toggle reaction", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -428,7 +430,7 @@ func (h *Handler) ToggleReaction(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("toggle reaction: encode response: %v", err)
+		h.logger.Warn("toggle reaction: encode response", "err", err)
 		return
 	}
 }
@@ -489,7 +491,7 @@ func (h *Handler) DeleteMessage(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrMessageNotFound):
 			http.Error(rw, "message not found", http.StatusNotFound)
 		default:
-			log.Printf("delete message: %v", err)
+			h.logger.Error("delete message", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -564,7 +566,7 @@ func (h *Handler) MarkRead(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrInvalidInput):
 			http.Error(rw, "invalid input", http.StatusBadRequest)
 		default:
-			log.Printf("mark read message: %v", err)
+			h.logger.Error("mark read message", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -591,13 +593,13 @@ func (h *Handler) broadcast(
 ) {
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("marshal event: %v", err)
+		h.logger.Error("broadcast: marshal event", "chat_id", chatID, "err", err)
 		return
 	}
 
 	ids, err := h.service.ListMemberIDs(ctx, chatID)
 	if err != nil {
-		log.Printf("list member ids: %v", err)
+		h.logger.Error("broadcast: list member ids", "chat_id", chatID, "err", err)
 		return
 	}
 
@@ -648,7 +650,7 @@ func (h *Handler) ListReads(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrChatNotFound):
 			http.Error(rw, "chat not found", http.StatusNotFound)
 		default:
-			log.Printf("list reads: %v", err)
+			h.logger.Error("list reads", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -665,7 +667,7 @@ func (h *Handler) ListReads(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("list reads: encode response: %v", err)
+		h.logger.Warn("list reads: encode response", "err", err)
 		return
 	}
 }
