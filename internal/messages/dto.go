@@ -1,6 +1,8 @@
 package messages
 
-import "time"
+import (
+	"time"
+)
 
 type msgRequest struct {
 	Message   string `json:"message" example:"Привет!" minLength:"1" maxLength:"500"`
@@ -8,14 +10,15 @@ type msgRequest struct {
 } //@name MessageRequest
 
 type msgResponse struct {
-	ID        int            `json:"id" example:"120"`
-	ChatID    int            `json:"chat_id" example:"13"`
-	UserID    int            `json:"user_id" example:"38"`
-	Message   string         `json:"message" example:"Привет!"`
-	CreatedAt time.Time      `json:"created_at" example:"2026-10-28T18:34:54Z"`
-	EditedAt  *time.Time     `json:"edited_at,omitempty" example:"2026-10-28T18:40:12Z"`
-	Deleted   bool           `json:"deleted" example:"false"`
-	ReplyTo   *replyResponse `json:"reply_to,omitempty"`
+	ID        int                `json:"id" example:"120"`
+	ChatID    int                `json:"chat_id" example:"13"`
+	UserID    int                `json:"user_id" example:"38"`
+	Message   string             `json:"message" example:"Привет!"`
+	CreatedAt time.Time          `json:"created_at" example:"2026-10-28T18:34:54Z"`
+	EditedAt  *time.Time         `json:"edited_at,omitempty" example:"2026-10-28T18:40:12Z"`
+	Deleted   bool               `json:"deleted" example:"false"`
+	ReplyTo   *replyResponse     `json:"reply_to,omitempty"`
+	Reactions []reactionResponse `json:"reactions,omitempty"`
 } //@name Message
 
 type editedEvent struct {
@@ -50,3 +53,19 @@ type replyResponse struct {
 	UserID  int    `json:"user_id" example:"39"`
 	Message string `json:"message" example:"Во сколько встречаемся?"`
 } //@name Reply
+
+type reactionRequest struct {
+	Emoji string `json:"emoji" example:"👍"`
+} //@name ReactionRequest
+
+type reactionResponse struct {
+	Emoji   string `json:"emoji" example:"👍"`
+	UserIDs []int  `json:"user_ids" example:"38,39"`
+} //@name Reaction
+
+type reactionEvent struct {
+	Type      string             `json:"type"`
+	ChatID    int                `json:"chat_id"`
+	MsgID     int                `json:"id"`
+	Reactions []reactionResponse `json:"reactions"`
+}

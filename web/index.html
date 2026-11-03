@@ -496,6 +496,62 @@ section#chat { flex: 1; display: flex; flex-direction: column; min-width: 0; bac
 .msg-row.editing .bubble,
 .msg-row.replying .bubble { border-color: var(--accent); }
 
+/* реакции под сообщением */
+.reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.msg-row.mine .reactions { justify-content: flex-end; }
+.reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.reaction .e { font-size: 14px; line-height: 1; }
+.reaction:hover { border-color: var(--text-3); }
+.reaction.mine {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+.msg-actions { position: relative; }
+.emoji-picker {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  z-index: 5;
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: pop .15s var(--ease);
+}
+.msg-row.mine .emoji-picker { right: 0; }
+.msg-row:not(.mine) .emoji-picker { left: 0; }
+.emoji-picker button {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+  transition: transform .12s var(--ease), background .12s var(--ease);
+}
+.emoji-picker button:hover { background: var(--hover-bg); transform: scale(1.15); }
+.emoji-picker button.mine { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.msg-row.picking .msg-actions { opacity: 1; }
+
 /* цитата сообщения, на которое ответили */
 .quote {
   display: flex;
@@ -924,6 +980,7 @@ const ICONS = {
   sun: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>',
   pencil: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9a2.1 2.1 0 0 0-4-4L4 16v4z"/><path d="m13.5 6.5 4 4"/></svg>',
   trash: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>',
+  smile: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 14.5c.9 1.2 2.1 1.8 3.5 1.8s2.6-.6 3.5-1.8"/><path d="M9.5 9.5v.01M14.5 9.5v.01"/></svg>',
   reply: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7 4 12l5 5"/><path d="M4 12h10a6 6 0 0 1 6 6v1"/></svg>',
   tick: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
   "tick-double": '<svg width="18" height="14" viewBox="0 0 30 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 12.5 4.5 4.5L17 7.5"/><path d="m13 16 1 1L23.5 7.5"/></svg>',
@@ -969,6 +1026,9 @@ systemLight.addEventListener("change", applyTheme); // система смени
 // =====================================================================
 //  Состояние приложения
 // =====================================================================
+// Тот же набор, что allowedEmoji на сервере. ❤️ — это два символа (U+2764 + U+FE0F), поэтому пишем через escape
+const EMOJI = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F525}"];
+
 const state = {
   token: localStorage.getItem("token"),
   me: null,
@@ -1026,6 +1086,7 @@ function humanError(text) {
     "invalid message": "Сообщение должно быть от 1 до 500 символов",
     "bad json": "Неверный формат сообщения",
     "message must be 1-500 symbols": "Сообщение должно быть от 1 до 500 символов",
+    "invalid emoji": "Такую реакцию поставить нельзя",
     "reply message not found": "Сообщение, на которое вы отвечаете, не найдено",
     "message not found": "Сообщение не найдено или уже удалено",
   };
@@ -1303,6 +1364,7 @@ async function loadHistory() {
 function renderMessages() {
   const inner = $("messagesInner");
   inner.innerHTML = "";
+  openPicker = null; // панель реакций пропадает вместе со старыми строками
 
   if (state.searchQuery) return renderSearch();
 
@@ -1378,6 +1440,7 @@ function messageRow(m, cont, highlight) {
   if (mine && !m.deleted && !highlight) t.append(tickMark(m));
   bubble.append(t);
   body.append(bubble);
+  if (!m.deleted && !highlight && m.reactions && m.reactions.length) body.append(reactionsRow(m));
 
   row.append(av, body);
   if (!m.deleted && !highlight) row.append(messageActions(m, mine));
@@ -1385,6 +1448,71 @@ function messageRow(m, cont, highlight) {
   if (state.replyTo && state.replyTo.id === m.id) row.classList.add("replying");
   return row;
 }
+
+// Плашки реакций: «👍 2»; своя подсвечена, клик — поставить/снять
+function reactionsRow(m) {
+  const box = document.createElement("div");
+  box.className = "reactions";
+  for (const r of m.reactions) {
+    const mine = r.user_ids.includes(state.me.id);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "reaction" + (mine ? " mine" : "");
+    btn.title = r.user_ids.map((id) => (id === state.me.id ? "Вы" : userName(id))).join(", ");
+    const e = document.createElement("span");
+    e.className = "e";
+    e.textContent = r.emoji;
+    btn.append(e, document.createTextNode(String(r.user_ids.length)));
+    btn.onclick = () => toggleReaction(m, r.emoji);
+    box.append(btn);
+  }
+  return box;
+}
+
+function myReaction(m) {
+  const r = (m.reactions || []).find((x) => x.user_ids.includes(state.me.id));
+  return r ? r.emoji : null;
+}
+
+async function toggleReaction(m, emoji) {
+  closePicker();
+  try {
+    const list = await api("POST", `/chats/${m.chat_id}/messages/${m.id}/reactions`, { emoji });
+    updateMessage(m.chat_id, m.id, { reactions: list });
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+// Всплывающая панель с шестью эмодзи над кнопкой-смайликом
+let openPicker = null;
+function closePicker() {
+  if (!openPicker) return;
+  openPicker.closest(".msg-row")?.classList.remove("picking");
+  openPicker.remove();
+  openPicker = null;
+}
+function showPicker(m, anchor) {
+  if (openPicker && openPicker.parentElement === anchor) return closePicker();
+  closePicker();
+  const picker = document.createElement("div");
+  picker.className = "emoji-picker";
+  const current = myReaction(m);
+  for (const emoji of EMOJI) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = emoji;
+    if (emoji === current) b.className = "mine";
+    b.onclick = (e) => { e.stopPropagation(); toggleReaction(m, emoji); };
+    picker.append(b);
+  }
+  anchor.append(picker);
+  anchor.closest(".msg-row").classList.add("picking");
+  openPicker = picker;
+}
+document.addEventListener("click", (e) => {
+  if (openPicker && !e.target.closest(".emoji-picker, [data-react]")) closePicker();
+});
 
 // Цитата над текстом ответа; клик — прокрутить к оригиналу
 function quoteBlock(r) {
@@ -1440,7 +1568,16 @@ function messageActions(m, mine) {
   reply.title = "Ответить";
   reply.innerHTML = ICONS.reply;
   reply.onclick = () => startReplying(m);
-  box.append(reply);
+
+  const react = document.createElement("button");
+  react.type = "button";
+  react.className = "icon-btn";
+  react.title = "Реакция";
+  react.dataset.react = "";
+  react.innerHTML = ICONS.smile;
+  react.onclick = () => showPicker(m, box);
+
+  box.append(react, reply);
   if (!mine) return box;
 
   const edit = document.createElement("button");
@@ -1615,7 +1752,7 @@ async function deleteMessage(m) {
   if (!confirm("Удалить сообщение? Собеседники увидят пометку «Сообщение удалено».")) return;
   try {
     await api("DELETE", `/chats/${m.chat_id}/messages/${m.id}`);
-    updateMessage(m.chat_id, m.id, { message: "", deleted: true, edited_at: null });
+    updateMessage(m.chat_id, m.id, { message: "", deleted: true, edited_at: null, reactions: [] });
   } catch (err) {
     toast(err.message);
   }
@@ -1757,8 +1894,12 @@ function connectWS() {
       applyRead(data);
       return;
     }
+    if (data.type === "message.reactions") {
+      updateMessage(data.chat_id, data.id, { reactions: data.reactions });
+      return;
+    }
     if (data.type === "message.deleted") {
-      updateMessage(data.chat_id, data.id, { message: "", deleted: true, edited_at: null });
+      updateMessage(data.chat_id, data.id, { message: "", deleted: true, edited_at: null, reactions: [] });
       return;
     }
     // новое сообщение: { id, chat_id, user_id, message, created_at, reply_to? }
@@ -1805,6 +1946,7 @@ $("modalClose").onclick = closeModal;
 $("modal").onclick = (e) => { if (e.target === $("modal")) closeModal(); };
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !$("modal").classList.contains("hidden")) closeModal();
+  if (e.key === "Escape") closePicker();
 });
 
 $("modalForm").onsubmit = async (e) => {

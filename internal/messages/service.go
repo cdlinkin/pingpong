@@ -17,6 +17,9 @@ type repository interface {
 	MarkRead(ctx context.Context, chatID, userID, msgID int) (int, error)
 	ListReads(ctx context.Context, chatID int) ([]ReadModel, error)
 	MessageInChat(ctx context.Context, chatID, msgID int) (bool, error)
+	RemoveReaction(ctx context.Context, msgID, userID int, emoji string) (bool, error)
+	UpsertReaction(ctx context.Context, msgID, userID int, emoji string) error
+	ListReactions(ctx context.Context, msgIDs []int) ([]ReactionModel, error)
 }
 
 type Service struct {
@@ -119,6 +122,27 @@ func (s *Service) ListMessage(
 			"list messages: %w",
 			err,
 		)
+	}
+
+	ids := make([]int, 0, len(messages))
+	for _, m := range messages {
+		ids = append(ids, m.ID)
+	}
+
+	reactions, err := s.repository.ListReactions(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list reactions: %w", err)
+	}
+
+	byMsg := make(map[int][]ReactionModel)
+	for _, r := range reactions {
+		byMsg[r.MsgID] = append(byMsg[r.MsgID], r)
+	}
+
+	for i := range messages {
+		if messages[i].DeletedAt == nil {
+			messages[i].Reactions = byMsg[messages[i].ID]
+		}
 	}
 
 	return messages, nil
@@ -291,4 +315,82 @@ func (s *Service) ListReads(
 	}
 
 	return reads, nil
+}
+
+var allowedEmoji = map[string]bool{
+	"👍":  true,
+	"❤️": true,
+	"😂":  true,
+	"😮":  true,
+	"😢":  true,
+	"🔥":  true,
+}
+
+func (s *Service) ToggleReaction(
+	ctx context.Context,
+	userID, chatID, msgID int,
+	emoji string,
+) ([]ReactionModel, error) {
+	if !allowedEmoji[emoji] {
+		return nil, fmt.Errorf(
+			"not allowed emoji: %w",
+			ErrInvalidInput,
+		)
+	}
+
+	isMember, err := s.repository.IsMember(ctx, chatID, userID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"is member: %w",
+			err,
+		)
+	}
+	if !isMember {
+		return nil, fmt.Errorf(
+			"user not in chat: %w",
+			ErrChatNotFound,
+		)
+	}
+
+	ok, err := s.repository.MessageInChat(ctx, chatID, msgID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"message in chat: %w",
+			err,
+		)
+	}
+
+	if !ok {
+		return nil, fmt.Errorf(
+			"message not in chat: %w",
+			ErrMessageNotFound,
+		)
+	}
+
+	removed, err := s.repository.RemoveReaction(ctx, msgID, userID, emoji)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"remove reaction: %w",
+			err,
+		)
+	}
+
+	if !removed {
+		if err := s.repository.UpsertReaction(ctx, msgID, userID, emoji); err != nil {
+			return nil, fmt.Errorf(
+				"upsert reaction: %w",
+				err,
+			)
+		}
+	}
+
+	reactions, err := s.repository.ListReactions(ctx, []int{msgID})
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list reactions: %w",
+			err,
+		)
+	}
+
+	return reactions, nil
 }

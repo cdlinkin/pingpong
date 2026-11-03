@@ -80,6 +80,10 @@ definitions:
       message:
         example: Привет!
         type: string
+      reactions:
+        items:
+          $ref: '#/definitions/Reaction'
+        type: array
       reply_to:
         $ref: '#/definitions/Reply'
       user_id:
@@ -96,6 +100,25 @@ definitions:
       reply_to_id:
         example: 118
         type: integer
+    type: object
+  Reaction:
+    properties:
+      emoji:
+        example: "\U0001F44D"
+        type: string
+      user_ids:
+        example:
+        - 38
+        - 39
+        items:
+          type: integer
+        type: array
+    type: object
+  ReactionRequest:
+    properties:
+      emoji:
+        example: "\U0001F44D"
+        type: string
     type: object
   ReadMark:
     properties:
@@ -520,6 +543,63 @@ paths:
       security:
       - BearerAuth: []
       summary: Изменить сообщение
+      tags:
+      - messages
+  /chats/{id}/messages/{msgID}/reactions:
+    post:
+      consumes:
+      - application/json
+      description: "Работает как переключатель: у одного пользователя на сообщении
+        может быть только одна реакция. Та же эмодзи ещё раз снимает её, другая заменяет.
+        Разрешены: \U0001F44D ❤️ \U0001F602 \U0001F62E \U0001F622 \U0001F525. На удалённое
+        сообщение реакцию поставить нельзя. В ответе актуальный список реакций сообщения;
+        участники чата онлайн получают по WebSocket событие `{\"type\":\"message.reactions\",\"chat_id\":13,\"id\":120,\"reactions\":[...]}`."
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ID сообщения
+        in: path
+        name: msgID
+        required: true
+        type: integer
+      - description: Эмодзи
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ReactionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Реакции сообщения после изменения
+          schema:
+            items:
+              $ref: '#/definitions/Reaction'
+            type: array
+        "400":
+          description: invalid emoji
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found / message not found (удалено или из другого
+            чата)
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Поставить или снять реакцию
       tags:
       - messages
   /chats/{id}/messages/search:

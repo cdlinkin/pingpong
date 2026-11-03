@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 )
 
 type fakeRepo struct {
@@ -31,6 +32,9 @@ type fakeRepo struct {
 	readsCalls int
 
 	chatMessages map[int][]int // chatID -> id сообщений, на которые можно ответить
+
+	listed    []MessageModel  // что вернёт ListMessage
+	reactions []ReactionModel // «таблица» message_reactions
 }
 
 func (f *fakeRepo) IsMember(ctx context.Context, chatID, userID int) (bool, error) {
@@ -65,7 +69,7 @@ func (f *fakeRepo) ListMessage(ctx context.Context, chatID, beforeID, limit int)
 	f.listCalls++
 	f.gotBeforeID = beforeID
 	f.gotLimit = limit
-	return nil, nil
+	return f.listed, nil
 }
 
 func (f *fakeRepo) SearchMessages(ctx context.Context, chatID int, query string) ([]MessageModel, error) {
@@ -104,6 +108,40 @@ func (f *fakeRepo) MarkRead(ctx context.Context, chatID, userID, msgID int) (int
 		return 0, f.markErr
 	}
 	return f.lastReadID, nil
+}
+
+func (f *fakeRepo) RemoveReaction(ctx context.Context, msgID, userID int, emoji string) (bool, error) {
+	for i, r := range f.reactions {
+		if r.MsgID == msgID && r.UserID == userID && r.Emoji == emoji {
+			f.reactions = append(f.reactions[:i], f.reactions[i+1:]...)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// UpsertReaction ведёт себя как ON CONFLICT (message_id, user_id) DO UPDATE
+func (f *fakeRepo) UpsertReaction(ctx context.Context, msgID, userID int, emoji string) error {
+	for i, r := range f.reactions {
+		if r.MsgID == msgID && r.UserID == userID {
+			f.reactions[i].Emoji = emoji
+			return nil
+		}
+	}
+	f.reactions = append(f.reactions, ReactionModel{MsgID: msgID, UserID: userID, Emoji: emoji})
+	return nil
+}
+
+func (f *fakeRepo) ListReactions(ctx context.Context, msgIDs []int) ([]ReactionModel, error) {
+	var out []ReactionModel
+	for _, r := range f.reactions {
+		for _, id := range msgIDs {
+			if r.MsgID == id {
+				out = append(out, r)
+			}
+		}
+	}
+	return out, nil
 }
 
 const (
@@ -423,5 +461,100 @@ func TestSendMessageReply(t *testing.T) {
 				t.Fatal("message must not be saved")
 			}
 		})
+	}
+}
+
+func TestToggleReaction(t *testing.T) {
+	ctx := context.Background()
+	newRepo := func() *fakeRepo {
+		repo := newFakeRepo()
+		repo.chatMessages = map[int][]int{chatID: {5}, 99: {7}}
+		return repo
+	}
+
+	t.Run("set, change, remove", func(t *testing.T) {
+		repo := newRepo()
+		svc := NewService(repo)
+
+		got, err := svc.ToggleReaction(ctx, member, chatID, 5, "👍")
+		if err != nil {
+			t.Fatalf("set: %v", err)
+		}
+		if len(got) != 1 || got[0].Emoji != "👍" {
+			t.Fatalf("want one 👍, got %+v", got)
+		}
+
+		got, _ = svc.ToggleReaction(ctx, member, chatID, 5, "🔥")
+		if len(got) != 1 || got[0].Emoji != "🔥" {
+			t.Fatalf("want 👍 replaced by 🔥, got %+v", got)
+		}
+
+		got, _ = svc.ToggleReaction(ctx, member, chatID, 5, "🔥")
+		if len(got) != 0 {
+			t.Fatalf("same emoji again must remove it, got %+v", got)
+		}
+	})
+
+	t.Run("two users", func(t *testing.T) {
+		repo := newRepo()
+		svc := NewService(repo)
+		svc.ToggleReaction(ctx, member, chatID, 5, "👍")
+		got, _ := svc.ToggleReaction(ctx, 3, chatID, 5, "👍")
+		if len(got) != 2 {
+			t.Fatalf("want 2 reactions, got %+v", got)
+		}
+	})
+
+	tests := []struct {
+		name    string
+		userID  int
+		msgID   int
+		emoji   string
+		wantErr error
+	}{
+		{"emoji not allowed", member, 5, "💩", ErrInvalidInput},
+		{"empty emoji", member, 5, "", ErrInvalidInput},
+		{"not a member", stranger, 5, "👍", ErrChatNotFound},
+		{"message from another chat", member, 7, "👍", ErrMessageNotFound},
+		{"message does not exist", member, 12345, "👍", ErrMessageNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := newRepo()
+			_, err := NewService(repo).ToggleReaction(ctx, tt.userID, chatID, tt.msgID, tt.emoji)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("want %v, got %v", tt.wantErr, err)
+			}
+			if len(repo.reactions) != 0 {
+				t.Fatal("reaction must not be saved")
+			}
+		})
+	}
+}
+
+func TestListMessageReactions(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeRepo()
+	now := time.Now()
+	repo.listed = []MessageModel{{ID: 3}, {ID: 2, DeletedAt: &now}, {ID: 1}}
+	repo.reactions = []ReactionModel{
+		{MsgID: 3, UserID: member, Emoji: "👍"},
+		{MsgID: 3, UserID: 3, Emoji: "❤️"},
+		{MsgID: 2, UserID: member, Emoji: "😂"},
+		{MsgID: 77, UserID: member, Emoji: "🔥"}, // чужая страница
+	}
+
+	msgs, err := NewService(repo).ListMessage(ctx, member, chatID, 0, 0)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(msgs[0].Reactions) != 2 {
+		t.Fatalf("message 3: want 2 reactions, got %+v", msgs[0].Reactions)
+	}
+	if msgs[1].Reactions != nil {
+		t.Fatalf("deleted message must have no reactions, got %+v", msgs[1].Reactions)
+	}
+	if msgs[2].Reactions != nil {
+		t.Fatalf("message 1: want none, got %+v", msgs[2].Reactions)
 	}
 }
