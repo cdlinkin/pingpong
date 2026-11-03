@@ -3,7 +3,7 @@ package chats
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -12,13 +12,16 @@ import (
 
 type Handler struct {
 	service *Service
+	logger  *slog.Logger
 }
 
 func NewHandler(
 	service *Service,
+	logger *slog.Logger,
 ) *Handler {
 	return &Handler{
 		service: service,
+		logger:  logger,
 	}
 }
 
@@ -68,7 +71,7 @@ func (h *Handler) CreateGroupChat(rw http.ResponseWriter, r *http.Request) {
 				http.StatusBadRequest,
 			)
 		default:
-			log.Printf("create group chat: %v", err)
+			h.logger.Error("create group chat", "err", err)
 			http.Error(
 				rw,
 				"internal error",
@@ -84,7 +87,7 @@ func (h *Handler) CreateGroupChat(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("create group chat: encode response: %v", err)
+		h.logger.Warn("create group chat: encode response", "err", err)
 		return
 	}
 }
@@ -135,7 +138,7 @@ func (h *Handler) CreateDirectChat(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrInvalidInput):
 			http.Error(rw, err.Error(), http.StatusBadRequest)
 		default:
-			log.Printf("create direct chat: %v", err)
+			h.logger.Error("create direct chat", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -151,7 +154,7 @@ func (h *Handler) CreateDirectChat(rw http.ResponseWriter, r *http.Request) {
 	}
 	rw.WriteHeader(status)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("direct chat: encode response: %v", err)
+		h.logger.Warn("create direct chat: encode response", "err", err)
 		return
 	}
 }
@@ -181,7 +184,7 @@ func (h *Handler) ListUserChats(rw http.ResponseWriter, r *http.Request) {
 
 	chats, err := h.service.ListUserChats(r.Context(), userID)
 	if err != nil {
-		log.Printf("list user chats: %v", err)
+		h.logger.Error("list user chats", "err", err)
 		http.Error(
 			rw,
 			"internal error",
@@ -205,7 +208,7 @@ func (h *Handler) ListUserChats(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		log.Printf("list user chats: encode response: %v", err)
+		h.logger.Warn("list user chats: encode response", "err", err)
 		return
 	}
 }
@@ -268,7 +271,7 @@ func (h *Handler) AddMember(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrAlreadyMember):
 			http.Error(rw, "user is already a member", http.StatusConflict)
 		default:
-			log.Printf("add member: %v", err)
+			h.logger.Error("add member", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
@@ -332,7 +335,7 @@ func (h *Handler) RemoveMember(rw http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrInvalidInput):
 			http.Error(rw, "cannot remove yourself", http.StatusBadRequest)
 		default:
-			log.Printf("remove member: %v", err)
+			h.logger.Error("remove member", "err", err)
 			http.Error(rw, "internal error", http.StatusInternalServerError)
 		}
 		return
