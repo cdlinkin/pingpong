@@ -13,6 +13,7 @@ type MessageModel struct {
 	ReplyToID    *int
 	ReplyUserID  *int
 	ReplyMessage *string
+	Reactions    []ReactionModel
 }
 
 type ReadModel struct {

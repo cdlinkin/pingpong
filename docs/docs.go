@@ -667,6 +667,86 @@ const docTemplate = `{
                 }
             }
         },
+        "/chats/{id}/messages/{msgID}/reactions": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Работает как переключатель: у одного пользователя на сообщении может быть только одна реакция. Та же эмодзи ещё раз снимает её, другая заменяет. Разрешены: 👍 ❤️ 😂 😮 😢 🔥. На удалённое сообщение реакцию поставить нельзя. В ответе актуальный список реакций сообщения; участники чата онлайн получают по WebSocket событие ` + "`" + `{\"type\":\"message.reactions\",\"chat_id\":13,\"id\":120,\"reactions\":[...]}` + "`" + `.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messages"
+                ],
+                "summary": "Поставить или снять реакцию",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID чата",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "ID сообщения",
+                        "name": "msgID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Эмодзи",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ReactionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Реакции сообщения после изменения",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Reaction"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "invalid emoji",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "chat not found / message not found (удалено или из другого чата)",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/chats/{id}/read": {
             "post": {
                 "security": [
@@ -1126,6 +1206,12 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Привет!"
                 },
+                "reactions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Reaction"
+                    }
+                },
                 "reply_to": {
                     "$ref": "#/definitions/Reply"
                 },
@@ -1147,6 +1233,34 @@ const docTemplate = `{
                 "reply_to_id": {
                     "type": "integer",
                     "example": 118
+                }
+            }
+        },
+        "Reaction": {
+            "type": "object",
+            "properties": {
+                "emoji": {
+                    "type": "string",
+                    "example": "👍"
+                },
+                "user_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        38,
+                        39
+                    ]
+                }
+            }
+        },
+        "ReactionRequest": {
+            "type": "object",
+            "properties": {
+                "emoji": {
+                    "type": "string",
+                    "example": "👍"
                 }
             }
         },
