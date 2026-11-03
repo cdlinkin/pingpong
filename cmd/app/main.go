@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
@@ -13,13 +12,14 @@ import (
 	_ "github.com/cdlinkin/pingpong/docs"
 	"github.com/cdlinkin/pingpong/internal/auth"
 	"github.com/cdlinkin/pingpong/internal/chats"
+	"github.com/cdlinkin/pingpong/internal/config"
+	"github.com/cdlinkin/pingpong/internal/httpx"
 	"github.com/cdlinkin/pingpong/internal/logging"
 	"github.com/cdlinkin/pingpong/internal/messages"
 	"github.com/cdlinkin/pingpong/internal/ratelimit"
 	"github.com/cdlinkin/pingpong/internal/server"
 	"github.com/cdlinkin/pingpong/internal/ws"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
 	"golang.org/x/time/rate"
 )
@@ -46,16 +46,12 @@ func health(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rw.Header().Set("Content-Type", "application/json")
-
 	res := Response{
 		Status: "OK",
 	}
-	rw.WriteHeader(http.StatusOK)
 
-	if err := json.NewEncoder(rw).Encode(res); err != nil {
+	if err := httpx.WriteJSON(rw, http.StatusOK, res); err != nil {
 		slog.Warn("health: encode response", "err", err)
-		return
 	}
 }
 
@@ -86,24 +82,23 @@ func health(rw http.ResponseWriter, r *http.Request) {
 // @name						Authorization
 // @description				JWT из POST /login. Формат: `Bearer <token>`
 func main() {
-	envErr := godotenv.Load()
-	url := os.Getenv("DATABASE_URL")
+	cfg, cfgErr := config.Load()
 
-	logger := logging.New(
-		os.Getenv("LOG_LEVEL"),
-		os.Getenv("LOG_FORMAT"),
-	)
-
+	logger := logging.New(cfg.LogLevel, cfg.LogFormat)
 	slog.SetDefault(logger)
 
-	if envErr != nil {
+	if !cfg.EnvFile {
 		logger.Info("no .env file, using environment variables")
+	}
+	if cfgErr != nil {
+		logger.Error("config", "err", cfgErr)
+		os.Exit(1)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	pool, err := pgxpool.New(ctx, url)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		logger.Error("pgx pool", "err", err)
 		os.Exit(1)
@@ -115,16 +110,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		logger.Error("JWT_SECRET is not set")
-		os.Exit(1)
-	}
+	jwtSecret := []byte(cfg.JWTSecret)
 
 	repo := auth.NewRepository(pool)
-	service := auth.NewService(repo, []byte(jwtSecret))
+	service := auth.NewService(repo, jwtSecret)
 	handler := auth.NewHandler(service, logger)
-	middleware := auth.NewMiddleware([]byte(jwtSecret))
+	middleware := auth.NewMiddleware(jwtSecret)
 
 	chatsRepo := chats.NewRepository(pool)
 	chatsService := chats.NewService(chatsRepo)
@@ -147,7 +138,7 @@ func main() {
 	userLimit := ratelimit.New(10, 20)
 	wsLimit := ratelimit.New(5, 10)
 
-	wsHandler := ws.NewHandler([]byte(jwtSecret), wsHub, msgService, wsLimit, logger)
+	wsHandler := ws.NewHandler(jwtSecret, wsHub, msgService, wsLimit, logger)
 
 	protected := func(h http.HandlerFunc) http.Handler {
 		return middleware.Auth(userLimit.ByUser(h))

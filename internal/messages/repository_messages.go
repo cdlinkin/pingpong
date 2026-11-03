@@ -1,0 +1,203 @@
+package messages
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/jackc/pgx/v5"
+)
+
+func (r *Repository) MessageInChat(
+	ctx context.Context,
+	chatID, msgID int,
+) (bool, error) {
+	query := `
+	SELECT EXISTS 
+	(SELECT 1 
+	FROM messages 
+	WHERE id = $1 AND chat_id = $2 AND deleted_at IS NULL);	
+	`
+
+	var ok bool
+	if err := r.pool.QueryRow(
+		ctx,
+		query,
+		msgID,
+		chatID,
+	).Scan(&ok); err != nil {
+		return false, fmt.Errorf(
+			"message in chat: %w",
+			err,
+		)
+	}
+
+	return ok, nil
+}
+
+func (r *Repository) CreateMessage(
+	ctx context.Context,
+	chatID, userID int,
+	message string,
+	replyToID *int,
+) (MessageModel, error) {
+	query := `
+	WITH ins AS (
+    INSERT INTO messages (chat_id, user_id, message, reply_to_id)
+    VALUES ($1, $2, $3, $4)
+    RETURNING id, chat_id, user_id, message, created_at, reply_to_id
+	)
+	SELECT ins.id, ins.chat_id, ins.user_id, ins.message, ins.created_at,
+	ins.reply_to_id, r.user_id,
+	CASE WHEN r.deleted_at IS NULL THEN r.message ELSE '' END
+	FROM ins
+	LEFT JOIN messages r ON r.id = ins.reply_to_id;
+	`
+
+	row := r.pool.QueryRow(ctx, query, chatID, userID, message, replyToID)
+
+	var messageModel MessageModel
+
+	if err := row.Scan(
+		&messageModel.ID,
+		&messageModel.ChatID,
+		&messageModel.UserID,
+		&messageModel.Message,
+		&messageModel.CreatedAt,
+		&messageModel.ReplyToID,
+		&messageModel.ReplyUserID,
+		&messageModel.ReplyMessage,
+	); err != nil {
+		return MessageModel{}, fmt.Errorf(
+			"create message: %w",
+			err,
+		)
+	}
+	return messageModel, nil
+}
+
+func (r *Repository) ListMessage(
+	ctx context.Context,
+	chatID int,
+	beforeID, limit int,
+) ([]MessageModel, error) {
+	query := `
+	SELECT m.id, m.chat_id, m.user_id,
+	CASE WHEN m.deleted_at IS NULL THEN m.message ELSE '' END AS message,
+	m.created_at, m.edited_at, m.deleted_at,
+	m.reply_to_id, r.user_id,
+	CASE WHEN r.deleted_at IS NULL THEN r.message ELSE '' END
+	FROM messages AS m
+	LEFT JOIN messages AS r ON r.id = m.reply_to_id
+	WHERE m.chat_id = $1 AND m.id < $2
+	ORDER BY m.id DESC
+	LIMIT $3;
+	`
+
+	rows, err := r.pool.Query(ctx, query, chatID, beforeID, limit)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list message: %w",
+			err,
+		)
+	}
+	defer rows.Close()
+
+	var messages []MessageModel
+	for rows.Next() {
+		var m MessageModel
+		if err := rows.Scan(
+			&m.ID,
+			&m.ChatID,
+			&m.UserID,
+			&m.Message,
+			&m.CreatedAt,
+			&m.EditedAt,
+			&m.DeletedAt,
+			&m.ReplyToID,
+			&m.ReplyUserID,
+			&m.ReplyMessage,
+		); err != nil {
+			return nil, fmt.Errorf(
+				"scan message: %w",
+				err,
+			)
+		}
+		messages = append(messages, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf(
+			"rows: %w",
+			err,
+		)
+	}
+
+	return messages, nil
+}
+
+func (r *Repository) UpdateMessage(
+	ctx context.Context,
+	chatID, msgID, userID int,
+	msg string,
+) (MessageModel, error) {
+	query := `
+	UPDATE messages
+	SET message = $4, edited_at = now()
+	WHERE id = $2
+	AND chat_id = $1
+    AND user_id = $3
+	AND deleted_at IS NULL
+	RETURNING id, chat_id, user_id, message, created_at, edited_at, deleted_at;
+	`
+
+	var m MessageModel
+	if err := r.pool.QueryRow(ctx, query, chatID, msgID, userID, msg).Scan(
+		&m.ID,
+		&m.ChatID,
+		&m.UserID,
+		&m.Message,
+		&m.CreatedAt,
+		&m.EditedAt,
+		&m.DeletedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return MessageModel{}, ErrMessageNotFound
+		}
+		return MessageModel{}, fmt.Errorf(
+			"scan update message: %w",
+			err,
+		)
+	}
+
+	return m, nil
+}
+
+func (r *Repository) DeleteMessage(
+	ctx context.Context,
+	chatID, msgID, userID int,
+) error {
+	query := `
+	UPDATE messages
+	SET deleted_at = now()
+	WHERE id = $2
+	AND chat_id = $1
+    AND user_id = $3
+	AND deleted_at IS NULL
+	RETURNING id;
+	`
+
+	var id int
+	if err := r.pool.QueryRow(ctx, query, chatID, msgID, userID).Scan(
+		&id,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrMessageNotFound
+		}
+		return fmt.Errorf(
+			"scan delete message: %w",
+			err,
+		)
+	}
+
+	return nil
+}
