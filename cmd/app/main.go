@@ -6,6 +6,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	_ "github.com/cdlinkin/pingpong/docs"
@@ -13,6 +15,7 @@ import (
 	"github.com/cdlinkin/pingpong/internal/chats"
 	"github.com/cdlinkin/pingpong/internal/messages"
 	"github.com/cdlinkin/pingpong/internal/ratelimit"
+	"github.com/cdlinkin/pingpong/internal/server"
 	"github.com/cdlinkin/pingpong/internal/ws"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -87,7 +90,8 @@ func main() {
 	}
 	url := os.Getenv("DATABASE_URL")
 
-	ctx := context.Background()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
 
 	pool, err := pgxpool.New(ctx, url)
 	if err != nil {
@@ -156,7 +160,22 @@ func main() {
 	mux.Handle("GET /chats/{id}/reads", protected(msgHandler.ListReads))
 	mux.Handle("POST /chats/{id}/messages/{msgID}/reactions", protected(msgHandler.ToggleReaction))
 
-	if err := http.ListenAndServe(":8080", mux); err != nil {
-		log.Fatalf("error to run server: %v", err)
+	srv := &http.Server{
+		Addr:              ":8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+
+	srv.RegisterOnShutdown(wsHub.CloseAll)
+
+	if err := server.Run(
+		ctx,
+		srv,
+		10*time.Second,
+	); err != nil {
+		log.Printf(
+			"server: %v",
+			err,
+		)
 	}
 }

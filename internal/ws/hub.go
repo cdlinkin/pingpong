@@ -2,6 +2,7 @@ package ws
 
 import (
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
@@ -52,6 +53,19 @@ func (h *Hub) SendToUser(userID int, data []byte) {
 		select {
 		case c.Send <- data:
 		default:
+		}
+	}
+}
+
+func (h *Hub) CloseAll() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	msg := websocket.FormatCloseMessage(websocket.CloseGoingAway, "server shutdown")
+	for _, clients := range h.pool {
+		for c := range clients {
+			_ = c.Conn.WriteControl(websocket.CloseMessage, msg, time.Now().Add(time.Second))
+			_ = c.Conn.Close()
 		}
 	}
 }
