@@ -5,6 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+
+	"github.com/cdlinkin/pingpong/internal/httpx"
 )
 
 type Handler struct {
@@ -39,8 +41,6 @@ func (h *Handler) Register(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rw.Header().Set("Content-Type", "application/json")
-
 	var req registerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(rw, "invalid JSON", http.StatusBadRequest)
@@ -65,10 +65,8 @@ func (h *Handler) Register(rw http.ResponseWriter, r *http.Request) {
 		ID: userID,
 	}
 
-	rw.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(rw).Encode(response); err != nil {
+	if err := httpx.WriteJSON(rw, http.StatusCreated, response); err != nil {
 		h.logger.Warn("register: encode response", "err", err)
-		return
 	}
 }
 
@@ -91,8 +89,6 @@ func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 		http.Error(rw, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
-	rw.Header().Set("Content-Type", "application/json")
 
 	var req loginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -118,10 +114,8 @@ func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 		Token: token,
 	}
 
-	rw.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(rw).Encode(response); err != nil {
+	if err := httpx.WriteJSON(rw, http.StatusOK, response); err != nil {
 		h.logger.Warn("login: encode response", "err", err)
-		return
 	}
 }
 
@@ -138,7 +132,6 @@ func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 //	@Failure		500	{string}	string		"internal error"
 //	@Router			/me [get]
 func (h *Handler) Me(rw http.ResponseWriter, r *http.Request) {
-	rw.Header().Set("Content-Type", "application/json")
 
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {
@@ -169,9 +162,7 @@ func (h *Handler) Me(rw http.ResponseWriter, r *http.Request) {
 		CreatedAt: user.CreatedAt,
 	}
 
-	rw.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(rw).Encode(response); err != nil {
+	if err := httpx.WriteJSON(rw, http.StatusOK, response); err != nil {
 		h.logger.Warn("me: encode response", "err", err)
-		return
 	}
 }
