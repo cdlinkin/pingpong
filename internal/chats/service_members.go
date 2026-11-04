@@ -49,3 +49,22 @@ func (s *Service) RemoveMember(
 	}
 	return nil
 }
+
+func (s *Service) ListMembers(
+	ctx context.Context,
+	userID, chatID int,
+) ([]MemberModel, error) {
+	if _, err := s.memberRole(ctx, chatID, userID); err != nil {
+		return nil, err
+	}
+
+	members, err := s.repository.ListMembers(ctx, chatID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list members: %w",
+			err,
+		)
+	}
+
+	return members, nil
+}

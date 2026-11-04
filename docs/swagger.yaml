@@ -14,6 +14,9 @@ definitions:
       id:
         example: 13
         type: integer
+      peer_login:
+        example: sonya
+        type: string
       title:
         example: Команда проекта
         type: string
@@ -73,6 +76,21 @@ definitions:
     properties:
       message_id:
         example: 120
+        type: integer
+    type: object
+  Member:
+    properties:
+      login:
+        example: sonya
+        type: string
+      role:
+        enum:
+        - admin
+        - member
+        example: member
+        type: string
+      user_id:
+        example: 39
         type: integer
     type: object
   Message:
@@ -253,8 +271,9 @@ paths:
   /chats:
     get:
       description: Список чатов, в которых состоит текущий пользователь. У личных
-        чатов `title` равен null. `unread_count` — сколько чужих неудалённых сообщений
-        новее моей отметки прочтения (см. `POST /chats/{id}/read`).
+        чатов `title` равен null, а в `peer_login` лежит логин собеседника. `unread_count`
+        — сколько чужих неудалённых сообщений новее моей отметки прочтения (см. `POST
+        /chats/{id}/read`).
       produces:
       - application/json
       responses:
@@ -278,6 +297,45 @@ paths:
       tags:
       - chats
   /chats/{id}/members:
+    get:
+      description: Список участников чата с логинами и ролями, отсортированный по
+        логину. Если вы не участник чата, ответ 404.
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Участники
+          schema:
+            items:
+              $ref: '#/definitions/Member'
+            type: array
+        "400":
+          description: invalid chat id
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Участники чата
+      tags:
+      - chats
     post:
       consumes:
       - application/json
