@@ -8,4 +8,11 @@ type ChatModel struct {
 	Type        string
 	CreatedAt   time.Time
 	UnreadCount int
+	PeerLogin   *string
+}
+
+type MemberModel struct {
+	UserID int
+	Login  string
+	Role   string
 }

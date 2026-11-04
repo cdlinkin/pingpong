@@ -90,3 +90,34 @@ func (r *Repository) RemoveMember(
 	}
 	return nil
 }
+
+func (r *Repository) ListMembers(
+	ctx context.Context,
+	chatID int,
+) ([]MemberModel, error) {
+	query := `
+	SELECT m.user_id, u.login, m.role
+	FROM chat_members m
+	JOIN users u ON u.id = m.user_id
+	WHERE m.chat_id = $1
+	ORDER BY u.login;
+	`
+
+	rows, err := r.pool.Query(ctx, query, chatID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list members: %w",
+			err,
+		)
+	}
+
+	members, err := pgx.CollectRows(rows, pgx.RowToStructByPos[MemberModel])
+	if err != nil {
+		return nil, fmt.Errorf(
+			"collect members: %w",
+			err,
+		)
+	}
+
+	return members, nil
+}

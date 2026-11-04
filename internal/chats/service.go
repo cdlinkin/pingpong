@@ -14,6 +14,7 @@ type repository interface {
 	GetMemberRole(ctx context.Context, chatID, userID int) (string, error)
 	AddMember(ctx context.Context, chatID, userID int) error
 	RemoveMember(ctx context.Context, chatID, userID int) error
+	ListMembers(ctx context.Context, chatID int) ([]MemberModel, error)
 }
 
 type Service struct {
@@ -28,19 +29,27 @@ func NewService(
 	}
 }
 
-func (s *Service) ensureAdmin(ctx context.Context, chatID, userID int) error {
+func (s *Service) memberRole(ctx context.Context, chatID, userID int) (string, error) {
 	role, err := s.repository.GetMemberRole(ctx, chatID, userID)
 	if err != nil {
 		if errors.Is(err, ErrNotMember) {
-			return fmt.Errorf(
+			return "", fmt.Errorf(
 				"chat not found: %w",
 				ErrChatNotFound,
 			)
 		}
-		return fmt.Errorf(
+		return "", fmt.Errorf(
 			"get member role: %w",
 			err,
 		)
+	}
+	return role, nil
+}
+
+func (s *Service) ensureAdmin(ctx context.Context, chatID, userID int) error {
+	role, err := s.memberRole(ctx, chatID, userID)
+	if err != nil {
+		return err
 	}
 
 	if role != "admin" {

@@ -78,6 +78,16 @@ func (f *fakeRepo) AddMember(ctx context.Context, chatID, userID int) error {
 	return nil
 }
 
+func (f *fakeRepo) ListMembers(ctx context.Context, chatID int) ([]MemberModel, error) {
+	var members []MemberModel
+	for k, role := range f.roles {
+		if k.chatID == chatID {
+			members = append(members, MemberModel{UserID: k.userID, Login: "user", Role: role})
+		}
+	}
+	return members, nil
+}
+
 func (f *fakeRepo) RemoveMember(ctx context.Context, chatID, userID int) error {
 	if _, ok := f.roles[memberKey{chatID, userID}]; !ok {
 		return ErrNotMember
@@ -218,5 +228,31 @@ func TestRemoveMember(t *testing.T) {
 	}
 	if _, ok := repo.roles[memberKey{chatID, other}]; !ok {
 		t.Fatal("other must stay in chat")
+	}
+}
+
+func TestListMembers(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeRepo()
+	svc := NewService(repo)
+
+	chatID, err := svc.CreateGroupChat(ctx, "team", 1)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := svc.AddMember(ctx, 1, chatID, 2); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+
+	members, err := svc.ListMembers(ctx, 2, chatID)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(members) != 2 {
+		t.Fatalf("want 2 members, got %d", len(members))
+	}
+
+	if _, err := svc.ListMembers(ctx, 3, chatID); !errors.Is(err, ErrChatNotFound) {
+		t.Fatalf("stranger: want ErrChatNotFound, got %v", err)
 	}
 }

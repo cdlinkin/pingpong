@@ -151,6 +151,7 @@ func main() {
 	mux.Handle("POST /chats/group", protected(chatsHandler.CreateGroupChat))
 	mux.Handle("POST /chats/direct", protected(chatsHandler.CreateDirectChat))
 	mux.Handle("GET /chats", protected(chatsHandler.ListUserChats))
+	mux.Handle("GET /chats/{id}/members", protected(chatsHandler.ListMembers))
 	mux.Handle("POST /chats/{id}/members", protected(chatsHandler.AddMember))
 	mux.Handle("DELETE /chats/{id}/members/{userID}", protected(chatsHandler.RemoveMember))
 	mux.Handle("POST /chats/{id}/messages", protected(msgHandler.SendMessage))

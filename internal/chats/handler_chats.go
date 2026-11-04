@@ -140,7 +140,7 @@ func (h *Handler) CreateDirectChat(rw http.ResponseWriter, r *http.Request) {
 // ListUserChats godoc
 //
 //	@Summary		Мои чаты
-//	@Description	Список чатов, в которых состоит текущий пользователь. У личных чатов `title` равен null. `unread_count` — сколько чужих неудалённых сообщений новее моей отметки прочтения (см. `POST /chats/{id}/read`).
+//	@Description	Список чатов, в которых состоит текущий пользователь. У личных чатов `title` равен null, а в `peer_login` лежит логин собеседника. `unread_count` — сколько чужих неудалённых сообщений новее моей отметки прочтения (см. `POST /chats/{id}/read`).
 //	@Tags			chats
 //	@Produce		json
 //	@Security		BearerAuth
@@ -179,6 +179,7 @@ func (h *Handler) ListUserChats(rw http.ResponseWriter, r *http.Request) {
 				Type:        c.Type,
 				CreatedAt:   c.CreatedAt,
 				UnreadCount: c.UnreadCount,
+				PeerLogin:   c.PeerLogin,
 			},
 		)
 	}

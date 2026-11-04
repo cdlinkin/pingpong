@@ -19,7 +19,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Список чатов, в которых состоит текущий пользователь. У личных чатов `title` равен null. `unread_count` — сколько чужих неудалённых сообщений новее моей отметки прочтения (см. `POST /chats/{id}/read`).",
+                "description": "Список чатов, в которых состоит текущий пользователь. У личных чатов `title` равен null, а в `peer_login` лежит логин собеседника. `unread_count` — сколько чужих неудалённых сообщений новее моей отметки прочтения (см. `POST /chats/{id}/read`).",
                 "produces": [
                     "application/json"
                 ],
@@ -179,6 +179,65 @@
             }
         },
         "/chats/{id}/members": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Список участников чата с логинами и ролями, отсортированный по логину. Если вы не участник чата, ответ 404.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "summary": "Участники чата",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID чата",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Участники",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/Member"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "invalid chat id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "chat not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -1110,6 +1169,10 @@
                     "type": "integer",
                     "example": 13
                 },
+                "peer_login": {
+                    "type": "string",
+                    "example": "sonya"
+                },
                 "title": {
                     "type": "string",
                     "x-nullable": true,
@@ -1195,6 +1258,27 @@
                 "message_id": {
                     "type": "integer",
                     "example": 120
+                }
+            }
+        },
+        "Member": {
+            "type": "object",
+            "properties": {
+                "login": {
+                    "type": "string",
+                    "example": "sonya"
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "admin",
+                        "member"
+                    ],
+                    "example": "member"
+                },
+                "user_id": {
+                    "type": "integer",
+                    "example": 39
                 }
             }
         },
@@ -1458,4 +1542,4 @@
             "name": "realtime"
         }
     ]
-}
+}

@@ -139,3 +139,65 @@ func (h *Handler) RemoveMember(rw http.ResponseWriter, r *http.Request) {
 
 	rw.WriteHeader(http.StatusNoContent)
 }
+
+// ListMembers godoc
+//
+//	@Summary		Участники чата
+//	@Description	Список участников чата с логинами и ролями, отсортированный по логину. Если вы не участник чата, ответ 404.
+//	@Tags			chats
+//	@Produce		json
+//	@Security		BearerAuth
+//	@Param			id	path		int				true	"ID чата"
+//	@Success		200	{array}		memberResponse	"Участники"
+//	@Failure		400	{string}	string			"invalid chat id"
+//	@Failure		401	{string}	string			"invalid token"
+//	@Failure		404	{string}	string			"chat not found"
+//	@Failure		500	{string}	string			"internal error"
+//	@Router			/chats/{id}/members [get]
+func (h *Handler) ListMembers(rw http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(
+			rw,
+			"unauthorized",
+			http.StatusUnauthorized,
+		)
+		return
+	}
+	chatID, err := httpx.PathInt(r, "id")
+	if err != nil {
+		http.Error(
+			rw,
+			"invalid chat id",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	members, err := h.service.ListMembers(r.Context(), userID, chatID)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrChatNotFound):
+			http.Error(rw, "chat not found", http.StatusNotFound)
+		default:
+			h.logger.Error("list members", "err", err)
+			http.Error(rw, "internal error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	response := make([]memberResponse, 0, len(members))
+	for _, m := range members {
+		response = append(response,
+			memberResponse{
+				UserID: m.UserID,
+				Login:  m.Login,
+				Role:   m.Role,
+			},
+		)
+	}
+
+	if err := httpx.WriteJSON(rw, http.StatusOK, response); err != nil {
+		h.logger.Warn("list members: encode response", "err", err)
+	}
+}
