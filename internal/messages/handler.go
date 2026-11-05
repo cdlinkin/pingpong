@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 )
 
 type Notifier interface {
@@ -63,11 +64,22 @@ func toResponse(m MessageModel) msgResponse {
 		response.Reactions = toReactions(m.Reactions)
 	}
 
+	if m.Attachment != nil {
+		response.Attachment = &attachmentResponse{
+			ID:          m.Attachment.ID,
+			Name:        m.Attachment.FileName,
+			ContentType: m.Attachment.ContentType,
+			Size:        m.Attachment.Size,
+			URL:         "/attachments/" + strconv.Itoa(m.Attachment.ID),
+		}
+	}
+
 	if m.ReplyToID != nil && m.ReplyUserID != nil && m.ReplyMessage != nil {
 		response.ReplyTo = &replyResponse{
-			ID:      *m.ReplyToID,
-			UserID:  *m.ReplyUserID,
-			Message: *m.ReplyMessage,
+			ID:       *m.ReplyToID,
+			UserID:   *m.ReplyUserID,
+			Message:  *m.ReplyMessage,
+			FileName: m.ReplyFileName,
 		}
 	}
 	return response

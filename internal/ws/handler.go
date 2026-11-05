@@ -135,9 +135,10 @@ func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 
 		if msgDomain.ReplyToID != nil && msgDomain.ReplyUserID != nil && msgDomain.ReplyMessage != nil {
 			response.ReplyTo = &replyOut{
-				ID:      *msgDomain.ReplyToID,
-				UserID:  *msgDomain.ReplyUserID,
-				Message: *msgDomain.ReplyMessage,
+				ID:       *msgDomain.ReplyToID,
+				UserID:   *msgDomain.ReplyUserID,
+				Message:  *msgDomain.ReplyMessage,
+				FileName: msgDomain.ReplyFileName,
 			}
 		}
 		data, err = json.Marshal(response)

@@ -24,20 +24,8 @@ func (s *Service) SendMessage(
 		return MessageModel{}, err
 	}
 
-	if replyToID != nil {
-		ok, err := s.repository.MessageInChat(ctx, chatID, *replyToID)
-		if err != nil {
-			return MessageModel{}, fmt.Errorf(
-				"message in chat: %w",
-				err,
-			)
-		}
-		if !ok {
-			return MessageModel{}, fmt.Errorf(
-				"reply target not in chat: %w",
-				ErrMessageNotFound,
-			)
-		}
+	if err := s.ensureReplyTarget(ctx, chatID, replyToID); err != nil {
+		return MessageModel{}, err
 	}
 
 	msgModel, err := s.repository.CreateMessage(ctx, chatID, userID, msg, replyToID)
@@ -97,6 +85,10 @@ func (s *Service) ListMessage(
 		if messages[i].DeletedAt == nil {
 			messages[i].Reactions = byMsg[messages[i].ID]
 		}
+	}
+
+	if err := s.fillAttachments(ctx, messages, ids); err != nil {
+		return nil, err
 	}
 
 	return messages, nil

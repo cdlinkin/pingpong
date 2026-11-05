@@ -24,3 +24,25 @@ func TestLoadWithoutSecret(t *testing.T) {
 		t.Fatal("expected error when JWT_SECRET is empty")
 	}
 }
+
+func TestLoadUploadDir(t *testing.T) {
+	t.Setenv("JWT_SECRET", "secret")
+
+	t.Setenv("UPLOAD_DIR", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.UploadDir != "uploads" {
+		t.Fatalf("expected default uploads, got %q", cfg.UploadDir)
+	}
+
+	t.Setenv("UPLOAD_DIR", "/data/files")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.UploadDir != "/data/files" {
+		t.Fatalf("expected /data/files, got %q", cfg.UploadDir)
+	}
+}

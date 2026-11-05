@@ -49,9 +49,11 @@ func (r *Repository) CreateMessage(
 	)
 	SELECT ins.id, ins.chat_id, ins.user_id, ins.message, ins.created_at,
 	ins.reply_to_id, r.user_id,
-	CASE WHEN r.deleted_at IS NULL THEN r.message ELSE '' END
+	CASE WHEN r.deleted_at IS NULL THEN r.message ELSE '' END,
+	ra.file_name
 	FROM ins
-	LEFT JOIN messages r ON r.id = ins.reply_to_id;
+	LEFT JOIN messages r ON r.id = ins.reply_to_id
+	LEFT JOIN message_attachments ra ON ra.message_id = r.id AND r.deleted_at IS NULL;
 	`
 
 	row := r.pool.QueryRow(ctx, query, chatID, userID, message, replyToID)
@@ -67,6 +69,7 @@ func (r *Repository) CreateMessage(
 		&messageModel.ReplyToID,
 		&messageModel.ReplyUserID,
 		&messageModel.ReplyMessage,
+		&messageModel.ReplyFileName,
 	); err != nil {
 		return MessageModel{}, fmt.Errorf(
 			"create message: %w",
@@ -86,9 +89,11 @@ func (r *Repository) ListMessage(
 	CASE WHEN m.deleted_at IS NULL THEN m.message ELSE '' END AS message,
 	m.created_at, m.edited_at, m.deleted_at,
 	m.reply_to_id, r.user_id,
-	CASE WHEN r.deleted_at IS NULL THEN r.message ELSE '' END
+	CASE WHEN r.deleted_at IS NULL THEN r.message ELSE '' END,
+	ra.file_name
 	FROM messages AS m
 	LEFT JOIN messages AS r ON r.id = m.reply_to_id
+	LEFT JOIN message_attachments AS ra ON ra.message_id = r.id AND r.deleted_at IS NULL
 	WHERE m.chat_id = $1 AND m.id < $2
 	ORDER BY m.id DESC
 	LIMIT $3;
@@ -117,6 +122,7 @@ func (r *Repository) ListMessage(
 			&m.ReplyToID,
 			&m.ReplyUserID,
 			&m.ReplyMessage,
+			&m.ReplyFileName,
 		); err != nil {
 			return nil, fmt.Errorf(
 				"scan message: %w",

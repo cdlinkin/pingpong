@@ -29,5 +29,14 @@ func (s *Service) SearchMessages(
 		)
 	}
 
+	ids := make([]int, 0, len(messages))
+	for _, m := range messages {
+		ids = append(ids, m.ID)
+	}
+
+	if err := s.fillAttachments(ctx, messages, ids); err != nil {
+		return nil, err
+	}
+
 	return messages, nil
 }

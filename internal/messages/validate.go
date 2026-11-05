@@ -2,6 +2,7 @@ package messages
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 )
@@ -29,4 +30,26 @@ func validateQuery(q string) (string, error) {
 		)
 	}
 	return q, nil
+}
+
+func validateCaption(caption string) (string, error) {
+	caption = strings.TrimSpace(caption)
+	if utf8.RuneCountInString(caption) > 500 {
+		return "", fmt.Errorf(
+			"caption length must be 0-500: %w",
+			ErrInvalidInput,
+		)
+	}
+	return caption, nil
+}
+
+func cleanFileName(name string) string {
+	name = strings.TrimSpace(filepath.Base(strings.ReplaceAll(name, "\\", "/")))
+	if name == "" || name == "." || name == "/" {
+		return "file"
+	}
+	if runes := []rune(name); len(runes) > 100 {
+		name = string(runes[len(runes)-100:])
+	}
+	return name
 }

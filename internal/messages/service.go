@@ -3,6 +3,8 @@ package messages
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 )
 
 type repository interface {
@@ -19,15 +21,26 @@ type repository interface {
 	RemoveReaction(ctx context.Context, msgID, userID int, emoji string) (bool, error)
 	UpsertReaction(ctx context.Context, msgID, userID int, emoji string) error
 	ListReactions(ctx context.Context, msgIDs []int) ([]ReactionModel, error)
+	CreateAttachmentMessage(ctx context.Context, chatID, userID int, caption string, replyToID *int, a AttachmentModel) (MessageModel, error)
+	ListAttachments(ctx context.Context, msgIDs []int) ([]AttachmentModel, error)
+	GetAttachment(ctx context.Context, id int) (AttachmentModel, error)
+}
+
+type fileStorage interface {
+	Save(r io.Reader) (string, int64, error)
+	Open(key string) (*os.File, error)
+	Remove(key string) error
 }
 
 type Service struct {
 	repository repository
+	storage    fileStorage
 }
 
-func NewService(repository repository) *Service {
+func NewService(repository repository, storage fileStorage) *Service {
 	return &Service{
 		repository: repository,
+		storage:    storage,
 	}
 }
 
@@ -58,6 +71,26 @@ func (s *Service) ensureMember(ctx context.Context, chatID, userID int) error {
 		return fmt.Errorf(
 			"user not in chat: %w",
 			ErrChatNotFound,
+		)
+	}
+	return nil
+}
+
+func (s *Service) ensureReplyTarget(ctx context.Context, chatID int, replyToID *int) error {
+	if replyToID == nil {
+		return nil
+	}
+	ok, err := s.repository.MessageInChat(ctx, chatID, *replyToID)
+	if err != nil {
+		return fmt.Errorf(
+			"message in chat: %w",
+			err,
+		)
+	}
+	if !ok {
+		return fmt.Errorf(
+			"reply target not in chat: %w",
+			ErrMessageNotFound,
 		)
 	}
 	return nil
