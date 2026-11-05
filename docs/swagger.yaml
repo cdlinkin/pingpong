@@ -6,6 +6,24 @@ definitions:
         example: 40
         type: integer
     type: object
+  Attachment:
+    properties:
+      content_type:
+        example: image/png
+        type: string
+      id:
+        example: 7
+        type: integer
+      name:
+        example: schema.png
+        type: string
+      size:
+        example: 48213
+        type: integer
+      url:
+        example: /attachments/7
+        type: string
+    type: object
   Chat:
     properties:
       created_at:
@@ -95,6 +113,8 @@ definitions:
     type: object
   Message:
     properties:
+      attachment:
+        $ref: '#/definitions/Attachment'
       chat_id:
         example: 13
         type: integer
@@ -187,6 +207,9 @@ definitions:
     type: object
   Reply:
     properties:
+      file_name:
+        example: schema.png
+        type: string
       id:
         example: 118
         type: integer
@@ -246,6 +269,9 @@ definitions:
     type: object
   WSReply:
     properties:
+      file_name:
+        example: schema.png
+        type: string
       id:
         example: 118
         type: integer
@@ -268,6 +294,45 @@ info:
   title: PingPong API
   version: "1.0"
 paths:
+  /attachments/{id}:
+    get:
+      description: Отдаёт содержимое вложения. Доступно только участникам чата. Картинки
+        открываются в браузере (`inline`), остальные файлы скачиваются (`attachment`).
+        Если сообщение удалено или вы не участник чата, ответ 404.
+      parameters:
+      - description: ID вложения
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: Содержимое файла
+          schema:
+            type: file
+        "400":
+          description: invalid attachment id
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: attachment not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Скачать файл
+      tags:
+      - messages
   /chats:
     get:
       description: Список чатов, в которых состоит текущий пользователь. У личных
@@ -296,6 +361,71 @@ paths:
       summary: Мои чаты
       tags:
       - chats
+  /chats/{id}/attachments:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Загружает файл в чат как новое сообщение (multipart/form-data).
+        Максимум 10 МБ. Разрешены картинки (JPEG, PNG, GIF, WebP), PDF, ZIP и обычный
+        текст; тип определяется по содержимому файла, а не по расширению. Подпись
+        `message` необязательна (до 500 символов). Участники чата онлайн получают
+        новое сообщение по WebSocket так же, как обычное.
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Файл до 10 МБ
+        in: formData
+        name: file
+        required: true
+        type: file
+      - description: Подпись (до 500 символов)
+        in: formData
+        name: message
+        type: string
+      - description: ID сообщения, на которое это ответ
+        in: formData
+        name: reply_to_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Сообщение с вложением
+          schema:
+            $ref: '#/definitions/Message'
+        "400":
+          description: file is required / file is empty / caption must be up to 500
+            symbols
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found / reply message not found
+          schema:
+            type: string
+        "413":
+          description: file too large
+          schema:
+            type: string
+        "415":
+          description: unsupported file type
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Отправить файл
+      tags:
+      - messages
   /chats/{id}/members:
     get:
       description: Список участников чата с логинами и ролями, отсортированный по

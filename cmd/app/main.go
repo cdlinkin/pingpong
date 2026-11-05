@@ -18,6 +18,7 @@ import (
 	"github.com/cdlinkin/pingpong/internal/messages"
 	"github.com/cdlinkin/pingpong/internal/ratelimit"
 	"github.com/cdlinkin/pingpong/internal/server"
+	"github.com/cdlinkin/pingpong/internal/storage"
 	"github.com/cdlinkin/pingpong/internal/ws"
 	"github.com/jackc/pgx/v5/pgxpool"
 	httpSwagger "github.com/swaggo/http-swagger/v2"
@@ -123,8 +124,14 @@ func main() {
 
 	wsHub := ws.NewHub()
 
+	fileStore, err := storage.NewLocal(cfg.UploadDir)
+	if err != nil {
+		logger.Error("file storage", "err", err)
+		os.Exit(1)
+	}
+
 	msgRepo := messages.NewRepository(pool)
-	msgService := messages.NewService(msgRepo)
+	msgService := messages.NewService(msgRepo, fileStore)
 	msgHandler := messages.NewHandler(msgService, wsHub, logger)
 
 	mux := http.NewServeMux()
@@ -164,6 +171,8 @@ func main() {
 	mux.Handle("POST /chats/{id}/read", protected(msgHandler.MarkRead))
 	mux.Handle("GET /chats/{id}/reads", protected(msgHandler.ListReads))
 	mux.Handle("POST /chats/{id}/messages/{msgID}/reactions", protected(msgHandler.ToggleReaction))
+	mux.Handle("POST /chats/{id}/attachments", protected(msgHandler.SendAttachment))
+	mux.Handle("GET /attachments/{id}", protected(msgHandler.GetAttachment))
 
 	srv := &http.Server{
 		Addr:              ":8080",

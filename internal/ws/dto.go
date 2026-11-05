@@ -18,7 +18,8 @@ type outgoingMessage struct {
 } //@name WSOutgoingMessage
 
 type replyOut struct {
-	ID      int    `json:"id" example:"118"`
-	UserID  int    `json:"user_id" example:"39"`
-	Message string `json:"message" example:"Во сколько встречаемся?"`
+	ID       int     `json:"id" example:"118"`
+	UserID   int     `json:"user_id" example:"39"`
+	Message  string  `json:"message" example:"Во сколько встречаемся?"`
+	FileName *string `json:"file_name,omitempty" example:"schema.png"`
 } //@name WSReply

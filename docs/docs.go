@@ -15,6 +15,64 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/attachments/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Отдаёт содержимое вложения. Доступно только участникам чата. Картинки открываются в браузере (` + "`" + `inline` + "`" + `), остальные файлы скачиваются (` + "`" + `attachment` + "`" + `). Если сообщение удалено или вы не участник чата, ответ 404.",
+                "produces": [
+                    "application/octet-stream"
+                ],
+                "tags": [
+                    "messages"
+                ],
+                "summary": "Скачать файл",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID вложения",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Содержимое файла",
+                        "schema": {
+                            "type": "file"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid attachment id",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "attachment not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/chats": {
             "get": {
                 "security": [
@@ -168,6 +226,98 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/chats/{id}/attachments": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Загружает файл в чат как новое сообщение (multipart/form-data). Максимум 10 МБ. Разрешены картинки (JPEG, PNG, GIF, WebP), PDF, ZIP и обычный текст; тип определяется по содержимому файла, а не по расширению. Подпись ` + "`" + `message` + "`" + ` необязательна (до 500 символов). Участники чата онлайн получают новое сообщение по WebSocket так же, как обычное.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messages"
+                ],
+                "summary": "Отправить файл",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID чата",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Файл до 10 МБ",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Подпись (до 500 символов)",
+                        "name": "message",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "ID сообщения, на которое это ответ",
+                        "name": "reply_to_id",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Сообщение с вложением",
+                        "schema": {
+                            "$ref": "#/definitions/Message"
+                        }
+                    },
+                    "400": {
+                        "description": "file is required / file is empty / caption must be up to 500 symbols",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "chat not found / reply message not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "413": {
+                        "description": "file too large",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "415": {
+                        "description": "unsupported file type",
                         "schema": {
                             "type": "string"
                         }
@@ -1161,6 +1311,31 @@ const docTemplate = `{
                 }
             }
         },
+        "Attachment": {
+            "type": "object",
+            "properties": {
+                "content_type": {
+                    "type": "string",
+                    "example": "image/png"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 7
+                },
+                "name": {
+                    "type": "string",
+                    "example": "schema.png"
+                },
+                "size": {
+                    "type": "integer",
+                    "example": 48213
+                },
+                "url": {
+                    "type": "string",
+                    "example": "/attachments/7"
+                }
+            }
+        },
         "Chat": {
             "type": "object",
             "properties": {
@@ -1288,6 +1463,9 @@ const docTemplate = `{
         "Message": {
             "type": "object",
             "properties": {
+                "attachment": {
+                    "$ref": "#/definitions/Attachment"
+                },
                 "chat_id": {
                     "type": "integer",
                     "example": 13
@@ -1417,6 +1595,10 @@ const docTemplate = `{
         "Reply": {
             "type": "object",
             "properties": {
+                "file_name": {
+                    "type": "string",
+                    "example": "schema.png"
+                },
                 "id": {
                     "type": "integer",
                     "example": 118
@@ -1500,6 +1682,10 @@ const docTemplate = `{
         "WSReply": {
             "type": "object",
             "properties": {
+                "file_name": {
+                    "type": "string",
+                    "example": "schema.png"
+                },
                 "id": {
                     "type": "integer",
                     "example": 118

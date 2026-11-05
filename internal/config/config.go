@@ -12,6 +12,7 @@ type Config struct {
 	JWTSecret   string
 	LogLevel    string
 	LogFormat   string
+	UploadDir   string
 	EnvFile     bool
 }
 
@@ -23,7 +24,12 @@ func Load() (Config, error) {
 		JWTSecret:   os.Getenv("JWT_SECRET"),
 		LogLevel:    os.Getenv("LOG_LEVEL"),
 		LogFormat:   os.Getenv("LOG_FORMAT"),
+		UploadDir:   os.Getenv("UPLOAD_DIR"),
 		EnvFile:     envErr == nil,
+	}
+
+	if cfg.UploadDir == "" {
+		cfg.UploadDir = "uploads"
 	}
 
 	if cfg.JWTSecret == "" {

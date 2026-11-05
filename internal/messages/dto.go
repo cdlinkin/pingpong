@@ -10,15 +10,16 @@ type msgRequest struct {
 } //@name MessageRequest
 
 type msgResponse struct {
-	ID        int                `json:"id" example:"120"`
-	ChatID    int                `json:"chat_id" example:"13"`
-	UserID    int                `json:"user_id" example:"38"`
-	Message   string             `json:"message" example:"Привет!"`
-	CreatedAt time.Time          `json:"created_at" example:"2026-10-28T18:34:54Z"`
-	EditedAt  *time.Time         `json:"edited_at,omitempty" example:"2026-10-28T18:40:12Z"`
-	Deleted   bool               `json:"deleted" example:"false"`
-	ReplyTo   *replyResponse     `json:"reply_to,omitempty"`
-	Reactions []reactionResponse `json:"reactions,omitempty"`
+	ID         int                 `json:"id" example:"120"`
+	ChatID     int                 `json:"chat_id" example:"13"`
+	UserID     int                 `json:"user_id" example:"38"`
+	Message    string              `json:"message" example:"Привет!"`
+	CreatedAt  time.Time           `json:"created_at" example:"2026-10-28T18:34:54Z"`
+	EditedAt   *time.Time          `json:"edited_at,omitempty" example:"2026-10-28T18:40:12Z"`
+	Deleted    bool                `json:"deleted" example:"false"`
+	ReplyTo    *replyResponse      `json:"reply_to,omitempty"`
+	Reactions  []reactionResponse  `json:"reactions,omitempty"`
+	Attachment *attachmentResponse `json:"attachment,omitempty"`
 } //@name Message
 
 type editedEvent struct {
@@ -49,9 +50,10 @@ type readResponse struct {
 } //@name ReadMark
 
 type replyResponse struct {
-	ID      int    `json:"id" example:"118"`
-	UserID  int    `json:"user_id" example:"39"`
-	Message string `json:"message" example:"Во сколько встречаемся?"`
+	ID       int     `json:"id" example:"118"`
+	UserID   int     `json:"user_id" example:"39"`
+	Message  string  `json:"message" example:"Во сколько встречаемся?"`
+	FileName *string `json:"file_name,omitempty" example:"schema.png"`
 } //@name Reply
 
 type reactionRequest struct {
@@ -69,3 +71,11 @@ type reactionEvent struct {
 	MsgID     int                `json:"id"`
 	Reactions []reactionResponse `json:"reactions"`
 }
+
+type attachmentResponse struct {
+	ID          int    `json:"id" example:"7"`
+	Name        string `json:"name" example:"schema.png"`
+	ContentType string `json:"content_type" example:"image/png"`
+	Size        int64  `json:"size" example:"48213"`
+	URL         string `json:"url" example:"/attachments/7"`
+} //@name Attachment
