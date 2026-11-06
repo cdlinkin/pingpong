@@ -235,6 +235,61 @@ func TestListMessageAttachments(t *testing.T) {
 	}
 }
 
+func TestDeleteMessageRemovesFile(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("file removed", func(t *testing.T) {
+		repo := newFakeRepo()
+		store := newFakeStorage()
+		svc := NewService(repo, store)
+
+		msg, err := svc.SendAttachment(ctx, chatID, member, "", nil, "a.png", bytes.NewReader(pngHeader))
+		if err != nil {
+			t.Fatalf("send: %v", err)
+		}
+
+		if err := svc.DeleteMessage(
+			ctx,
+			msg.UserID,
+			msg.ChatID,
+			msg.ID,
+		); err != nil {
+			t.Fatalf("delete message: %v", err)
+		}
+
+		if len(store.files) != 0 {
+			t.Fatalf("file must be removed, left %d", len(store.files))
+		}
+	})
+
+	t.Run("delete failed, file kept", func(t *testing.T) {
+		repo := newFakeRepo()
+		store := newFakeStorage()
+		svc := NewService(repo, store)
+
+		msg, err := svc.SendAttachment(ctx, chatID, member, "", nil, "a.png", bytes.NewReader(pngHeader))
+		if err != nil {
+			t.Fatalf("send: %v", err)
+		}
+
+		repo.deleteErr = ErrMessageNotFound
+
+		err = svc.DeleteMessage(
+			ctx,
+			msg.UserID,
+			msg.ChatID,
+			msg.ID,
+		)
+		if !errors.Is(err, ErrMessageNotFound) {
+			t.Fatalf("want ErrMessageNotFound, got %v", err)
+		}
+
+		if len(store.files) != 1 {
+			t.Fatalf("file must be kept, got %d", len(store.files))
+		}
+	})
+}
+
 func intPtr(v int) *int {
 	return &v
 }

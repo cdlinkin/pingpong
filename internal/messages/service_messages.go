@@ -137,5 +137,17 @@ func (s *Service) DeleteMessage(
 		)
 	}
 
+	attachments, err := s.repository.ListAttachments(ctx, []int{msgID})
+	if err != nil {
+		return fmt.Errorf(
+			"list attachments: %w",
+			err,
+		)
+	}
+
+	for _, a := range attachments {
+		s.storage.Remove(a.StorageKey)
+	}
+
 	return nil
 }
