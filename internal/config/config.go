@@ -14,6 +14,7 @@ type Config struct {
 	LogFormat   string
 	UploadDir   string
 	EnvFile     bool
+	HTTPAddr    string
 }
 
 func Load() (Config, error) {
@@ -21,11 +22,16 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		DatabaseURL: os.Getenv("DATABASE_URL"),
+		HTTPAddr:    os.Getenv("HTTP_ADDR"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
 		LogLevel:    os.Getenv("LOG_LEVEL"),
 		LogFormat:   os.Getenv("LOG_FORMAT"),
 		UploadDir:   os.Getenv("UPLOAD_DIR"),
 		EnvFile:     envErr == nil,
+	}
+
+	if cfg.HTTPAddr == "" {
+		cfg.HTTPAddr = ":8080"
 	}
 
 	if cfg.UploadDir == "" {

@@ -46,3 +46,25 @@ func TestLoadUploadDir(t *testing.T) {
 		t.Fatalf("expected /data/files, got %q", cfg.UploadDir)
 	}
 }
+
+func TestLoadHTTPAddr(t *testing.T) {
+	t.Setenv("JWT_SECRET", "secret")
+
+	t.Setenv("HTTP_ADDR", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.HTTPAddr != ":8080" {
+		t.Fatalf("expected default http address, got %q", cfg.HTTPAddr)
+	}
+
+	t.Setenv("HTTP_ADDR", ":9090")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.HTTPAddr != ":9090" {
+		t.Fatalf("expected ':9090', got %q", cfg.HTTPAddr)
+	}
+}
