@@ -175,7 +175,7 @@ func main() {
 	mux.Handle("GET /attachments/{id}", protected(msgHandler.GetAttachment))
 
 	srv := &http.Server{
-		Addr:              ":8080",
+		Addr:              cfg.HTTPAddr,
 		Handler:           logging.Middleware(logger, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
