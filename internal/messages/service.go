@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 )
 
 type repository interface {
@@ -26,18 +25,18 @@ type repository interface {
 	GetAttachment(ctx context.Context, id int) (AttachmentModel, error)
 }
 
-type fileStorage interface {
-	Save(r io.Reader) (string, int64, error)
-	Open(key string) (*os.File, error)
-	Remove(key string) error
+type FileStorage interface {
+	Save(ctx context.Context, r io.Reader) (string, int64, error)
+	Open(ctx context.Context, key string) (io.ReadSeekCloser, error)
+	Remove(ctx context.Context, key string) error
 }
 
 type Service struct {
 	repository repository
-	storage    fileStorage
+	storage    FileStorage
 }
 
-func NewService(repository repository, storage fileStorage) *Service {
+func NewService(repository repository, storage FileStorage) *Service {
 	return &Service{
 		repository: repository,
 		storage:    storage,

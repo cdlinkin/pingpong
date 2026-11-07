@@ -33,6 +33,29 @@ func index(rw http.ResponseWriter, r *http.Request) {
 	http.ServeFile(rw, r, "web/index.html")
 }
 
+func newFileStorage(ctx context.Context, cfg config.Config) (messages.FileStorage, error) {
+	if cfg.Storage == "s3" {
+		s3, err := storage.NewS3(
+			ctx,
+			cfg.S3Endpoint,
+			cfg.S3AccessKey,
+			cfg.S3SecretKey,
+			cfg.S3Bucket,
+			cfg.S3UseSSL,
+		)
+		if err != nil {
+			return nil, err
+		}
+		return s3, nil
+	}
+
+	local, err := storage.NewLocal(cfg.UploadDir)
+	if err != nil {
+		return nil, err
+	}
+	return local, nil
+}
+
 // health godoc
 //
 //	@Summary		Проверка состояния
@@ -124,11 +147,12 @@ func main() {
 
 	wsHub := ws.NewHub()
 
-	fileStore, err := storage.NewLocal(cfg.UploadDir)
+	fileStore, err := newFileStorage(ctx, cfg)
 	if err != nil {
 		logger.Error("file storage", "err", err)
 		os.Exit(1)
 	}
+	logger.Info("file storage", "type", cfg.Storage)
 
 	msgRepo := messages.NewRepository(pool)
 	msgService := messages.NewService(msgRepo, fileStore)

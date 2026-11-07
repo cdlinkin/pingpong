@@ -1,16 +1,12 @@
 package storage
 
 import (
-	"crypto/rand"
-	"encoding/hex"
-	"errors"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 )
-
-var ErrInvalidKey = errors.New("invalid storage key")
 
 type Local struct {
 	dir string
@@ -23,20 +19,20 @@ func NewLocal(dir string) (*Local, error) {
 			err,
 		)
 	}
+
 	return &Local{
 		dir: dir,
 	}, nil
 }
 
-func (l *Local) Save(r io.Reader) (string, int64, error) {
-	buf := make([]byte, 16)
-	if _, err := rand.Read(buf); err != nil {
+func (l *Local) Save(_ context.Context, r io.Reader) (string, int64, error) {
+	key, err := newKey()
+	if err != nil {
 		return "", 0, fmt.Errorf(
-			"generate key: %w",
+			"generate newKey: %w",
 			err,
 		)
 	}
-	key := hex.EncodeToString(buf)
 
 	f, err := os.OpenFile(filepath.Join(l.dir, key), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
 	if err != nil {
@@ -61,7 +57,7 @@ func (l *Local) Save(r io.Reader) (string, int64, error) {
 	return key, size, nil
 }
 
-func (l *Local) Open(key string) (*os.File, error) {
+func (l *Local) Open(_ context.Context, key string) (io.ReadSeekCloser, error) {
 	path, err := l.path(key)
 	if err != nil {
 		return nil, err
@@ -69,7 +65,7 @@ func (l *Local) Open(key string) (*os.File, error) {
 	return os.Open(path)
 }
 
-func (l *Local) Remove(key string) error {
+func (l *Local) Remove(_ context.Context, key string) error {
 	path, err := l.path(key)
 	if err != nil {
 		return err
@@ -78,11 +74,12 @@ func (l *Local) Remove(key string) error {
 }
 
 func (l *Local) path(key string) (string, error) {
-	if len(key) != 32 {
-		return "", ErrInvalidKey
+	if err := checkKey(key); err != nil {
+		return "", fmt.Errorf(
+			"key is not validate: %w",
+			err,
+		)
 	}
-	if _, err := hex.DecodeString(key); err != nil {
-		return "", ErrInvalidKey
-	}
+
 	return filepath.Join(l.dir, key), nil
 }
