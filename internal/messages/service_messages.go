@@ -146,7 +146,7 @@ func (s *Service) DeleteMessage(
 	}
 
 	for _, a := range attachments {
-		s.storage.Remove(a.StorageKey)
+		s.storage.Remove(ctx, a.StorageKey)
 	}
 
 	return nil

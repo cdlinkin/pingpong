@@ -23,7 +23,7 @@ func newFakeStorage() *fakeStorage {
 	return &fakeStorage{files: map[string][]byte{}}
 }
 
-func (s *fakeStorage) Save(r io.Reader) (string, int64, error) {
+func (s *fakeStorage) Save(_ context.Context, r io.Reader) (string, int64, error) {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return "", 0, err
@@ -34,7 +34,7 @@ func (s *fakeStorage) Save(r io.Reader) (string, int64, error) {
 	return key, int64(len(data)), nil
 }
 
-func (s *fakeStorage) Open(key string) (*os.File, error) {
+func (s *fakeStorage) Open(_ context.Context, key string) (io.ReadSeekCloser, error) {
 	data, ok := s.files[key]
 	if !ok {
 		return nil, os.ErrNotExist
@@ -46,7 +46,7 @@ func (s *fakeStorage) Open(key string) (*os.File, error) {
 	return os.Open(path)
 }
 
-func (s *fakeStorage) Remove(key string) error {
+func (s *fakeStorage) Remove(_ context.Context, key string) error {
 	delete(s.files, key)
 	return nil
 }
@@ -213,6 +213,7 @@ func TestGetAttachment(t *testing.T) {
 func TestListMessageAttachments(t *testing.T) {
 	ctx := context.Background()
 	repo := newFakeRepo()
+	store := newFakeStorage()
 	now := time.Now()
 	repo.listed = []MessageModel{{ID: 3}, {ID: 2, DeletedAt: &now}, {ID: 1}}
 	repo.attachments = []AttachmentModel{
@@ -220,7 +221,7 @@ func TestListMessageAttachments(t *testing.T) {
 		{ID: 2, MsgID: 2, FileName: "b.pdf"},
 	}
 
-	msgs, err := NewService(repo, newFakeStorage()).ListMessage(ctx, member, chatID, 0, 0)
+	msgs, err := NewService(repo, store).ListMessage(ctx, member, chatID, 0, 0)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -9,12 +10,13 @@ import (
 )
 
 func TestLocalSaveOpenRemove(t *testing.T) {
+	ctx := context.Background()
 	s, err := NewLocal(t.TempDir())
 	if err != nil {
 		t.Fatalf("new: %v", err)
 	}
 
-	key, size, err := s.Save(strings.NewReader("hello"))
+	key, size, err := s.Save(ctx, strings.NewReader("hello"))
 	if err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -22,7 +24,7 @@ func TestLocalSaveOpenRemove(t *testing.T) {
 		t.Fatalf("unexpected key %q or size %d", key, size)
 	}
 
-	f, err := s.Open(key)
+	f, err := s.Open(ctx, key)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -32,22 +34,23 @@ func TestLocalSaveOpenRemove(t *testing.T) {
 		t.Fatalf("want hello, got %q", data)
 	}
 
-	if err := s.Remove(key); err != nil {
+	if err := s.Remove(ctx, key); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
-	if _, err := s.Open(key); !errors.Is(err, os.ErrNotExist) {
+	if _, err := s.Open(ctx, key); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("want not exist, got %v", err)
 	}
 }
 
 func TestLocalRejectsBadKeys(t *testing.T) {
+	ctx := context.Background()
 	s, err := NewLocal(t.TempDir())
 	if err != nil {
 		t.Fatalf("new: %v", err)
 	}
 
 	for _, key := range []string{"", "../../etc/passwd", "zz" + strings.Repeat("0", 30)} {
-		if _, err := s.Open(key); !errors.Is(err, ErrInvalidKey) {
+		if _, err := s.Open(ctx, key); !errors.Is(err, ErrInvalidKey) {
 			t.Fatalf("key %q: want ErrInvalidKey, got %v", key, err)
 		}
 	}

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 )
 
 const MaxAttachmentSize = 10 << 20
@@ -67,7 +66,7 @@ func (s *Service) SendAttachment(
 		)
 	}
 
-	key, size, err := s.storage.Save(io.LimitReader(br, MaxAttachmentSize+1))
+	key, size, err := s.storage.Save(ctx, io.LimitReader(br, MaxAttachmentSize+1))
 	if err != nil {
 		return MessageModel{}, fmt.Errorf(
 			"save file: %w",
@@ -75,7 +74,7 @@ func (s *Service) SendAttachment(
 		)
 	}
 	if size > MaxAttachmentSize {
-		s.storage.Remove(key)
+		s.storage.Remove(ctx, key)
 		return MessageModel{}, ErrFileTooLarge
 	}
 
@@ -93,7 +92,7 @@ func (s *Service) SendAttachment(
 		},
 	)
 	if err != nil {
-		s.storage.Remove(key)
+		s.storage.Remove(ctx, key)
 		return MessageModel{}, fmt.Errorf(
 			"create attachment message: %w",
 			err,
@@ -106,7 +105,7 @@ func (s *Service) SendAttachment(
 func (s *Service) GetAttachment(
 	ctx context.Context,
 	userID, attachmentID int,
-) (AttachmentModel, *os.File, error) {
+) (AttachmentModel, io.ReadSeekCloser, error) {
 	a, err := s.repository.GetAttachment(ctx, attachmentID)
 	if err != nil {
 		return AttachmentModel{}, nil, fmt.Errorf(
@@ -126,7 +125,7 @@ func (s *Service) GetAttachment(
 		return AttachmentModel{}, nil, err
 	}
 
-	f, err := s.storage.Open(a.StorageKey)
+	f, err := s.storage.Open(ctx, a.StorageKey)
 	if err != nil {
 		return AttachmentModel{}, nil, fmt.Errorf(
 			"open file: %w",
