@@ -36,6 +36,10 @@ func (s *Service) SendMessage(
 		)
 	}
 
+	if err := s.addMentions(ctx, &msgModel); err != nil {
+		return MessageModel{}, err
+	}
+
 	return msgModel, nil
 }
 

@@ -1,6 +1,8 @@
 package messages
 
 import (
+	"context"
+	"fmt"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -23,4 +25,22 @@ func parseMentions(text string) []string {
 	}
 
 	return logins
+}
+
+func (s *Service) addMentions(ctx context.Context, m *MessageModel) error {
+	logins := parseMentions(m.Message)
+	if len(logins) == 0 {
+		return nil
+	}
+
+	ids, err := s.repository.AddMentions(ctx, m.ID, m.ChatID, m.UserID, logins)
+	if err != nil {
+		return fmt.Errorf(
+			"add mentions: %w",
+			err,
+		)
+	}
+
+	m.Mentions = ids
+	return nil
 }

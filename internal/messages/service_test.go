@@ -31,12 +31,16 @@ type fakeRepo struct {
 	markErr    error
 	readsCalls int
 
-	chatMessages map[int][]int // chatID -> id сообщений, на которые можно ответить
+	chatMessages map[int][]int
 
-	listed    []MessageModel  // что вернёт ListMessage
-	reactions []ReactionModel // «таблица» message_reactions
+	listed    []MessageModel
+	reactions []ReactionModel
 
 	attachments []AttachmentModel
+
+	logins       map[string]int
+	mentionCalls int
+	mentionErr   error
 }
 
 func (f *fakeRepo) IsMember(ctx context.Context, chatID, userID int) (bool, error) {
@@ -57,7 +61,6 @@ func (f *fakeRepo) CreateMessage(ctx context.Context, chatID, userID int, messag
 	return m, nil
 }
 
-// MessageInChat: в чате chatID «лежат» сообщения с id из f.chatMessages
 func (f *fakeRepo) MessageInChat(ctx context.Context, chatID, msgID int) (bool, error) {
 	for _, id := range f.chatMessages[chatID] {
 		if id == msgID {
@@ -151,6 +154,26 @@ const (
 	member   = 1
 	stranger = 2
 )
+
+func (f *fakeRepo) AddMentions(ctx context.Context, msgID, chatID, authorID int, logins []string) ([]int, error) {
+	f.mentionCalls++
+	if f.mentionErr != nil {
+		return nil, f.mentionErr
+	}
+	var ids []int
+	for _, login := range logins {
+		id, ok := f.logins[login]
+		if !ok || id == authorID {
+			continue
+		}
+		for _, m := range f.members[chatID] {
+			if m == id {
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids, nil
+}
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{members: map[int][]int{chatID: {member, 3}}}

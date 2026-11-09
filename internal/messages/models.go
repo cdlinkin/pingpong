@@ -16,6 +16,7 @@ type MessageModel struct {
 	ReplyFileName *string
 	Reactions     []ReactionModel
 	Attachment    *AttachmentModel
+	Mentions      []int
 }
 
 type AttachmentModel struct {
