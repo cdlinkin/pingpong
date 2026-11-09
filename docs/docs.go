@@ -956,6 +956,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/chats/{id}/mute": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Личная настройка участника: заглушённый чат не присылает уведомлений, но сообщения и счётчик непрочитанных работают как обычно. Повторный запрос с тем же значением ничего не ломает. Если вы не участник чата, ответ 404.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "chats"
+                ],
+                "summary": "Включить или выключить звук чата",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "ID чата",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "true — заглушить, false — вернуть звук",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/MuteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Настройка сохранена"
+                    },
+                    "400": {
+                        "description": "Невалидный id чата или JSON",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "chat not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/chats/{id}/read": {
             "post": {
                 "security": [
@@ -1347,6 +1411,10 @@ const docTemplate = `{
                     "type": "integer",
                     "example": 13
                 },
+                "muted": {
+                    "type": "boolean",
+                    "example": false
+                },
                 "peer_login": {
                     "type": "string",
                     "example": "sonya"
@@ -1517,6 +1585,15 @@ const docTemplate = `{
                 "reply_to_id": {
                     "type": "integer",
                     "example": 118
+                }
+            }
+        },
+        "MuteRequest": {
+            "type": "object",
+            "properties": {
+                "muted": {
+                    "type": "boolean",
+                    "example": false
                 }
             }
         },

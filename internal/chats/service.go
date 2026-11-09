@@ -15,6 +15,7 @@ type repository interface {
 	AddMember(ctx context.Context, chatID, userID int) error
 	RemoveMember(ctx context.Context, chatID, userID int) error
 	ListMembers(ctx context.Context, chatID int) ([]MemberModel, error)
+	SetMuted(ctx context.Context, userID, chatID int, muted bool) error
 }
 
 type Service struct {

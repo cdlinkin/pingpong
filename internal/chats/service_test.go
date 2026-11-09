@@ -13,12 +13,14 @@ type fakeRepo struct {
 	roles   map[memberKey]string
 	direct  map[[2]int]int
 	created int
+	muted   map[memberKey]bool
 }
 
 func newFakeRepo() *fakeRepo {
 	return &fakeRepo{
 		roles:  make(map[memberKey]string),
 		direct: make(map[[2]int]int),
+		muted:  make(map[memberKey]bool),
 	}
 }
 
@@ -93,6 +95,14 @@ func (f *fakeRepo) RemoveMember(ctx context.Context, chatID, userID int) error {
 		return ErrNotMember
 	}
 	delete(f.roles, memberKey{chatID, userID})
+	return nil
+}
+
+func (f *fakeRepo) SetMuted(ctx context.Context, userID, chatID int, muted bool) error {
+	if _, ok := f.roles[memberKey{chatID, userID}]; !ok {
+		return ErrNotMember
+	}
+	f.muted[memberKey{chatID, userID}] = muted
 	return nil
 }
 
@@ -254,5 +264,44 @@ func TestListMembers(t *testing.T) {
 
 	if _, err := svc.ListMembers(ctx, 3, chatID); !errors.Is(err, ErrChatNotFound) {
 		t.Fatalf("stranger: want ErrChatNotFound, got %v", err)
+	}
+}
+
+func TestSetMuted(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeRepo()
+	svc := NewService(repo)
+
+	chatID, err := svc.CreateGroupChat(ctx, "team", 1)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		userID  int
+		muted   bool
+		wantErr error
+	}{
+		{"member mutes", 1, true, nil},
+		{"mute again", 1, true, nil},
+		{"member unmutes", 1, false, nil},
+		{"stranger", 2, true, ErrChatNotFound},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := svc.SetMuted(ctx, tt.userID, chatID, tt.muted)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("want %v, got %v", tt.wantErr, err)
+			}
+			if tt.wantErr == nil && repo.muted[memberKey{chatID, tt.userID}] != tt.muted {
+				t.Fatalf("want muted=%v", tt.muted)
+			}
+		})
+	}
+
+	if _, ok := repo.muted[memberKey{chatID, 2}]; ok {
+		t.Fatal("stranger must not get a mute record")
 	}
 }

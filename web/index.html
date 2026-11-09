@@ -474,6 +474,11 @@ aside {
   place-items: center;
 }
 .badge.pop { animation: pop-in .45s var(--spring); }
+.badge.muted { background: var(--border); color: var(--text-2); }
+.chat-name { display: flex; align-items: center; gap: 5px; }
+.chat-name .name-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.chat-name .mute-mark { flex: none; display: inline-flex; color: var(--text-3); }
+#muteBtn.on { color: var(--text-3); }
 .list-empty { padding: 28px 16px; text-align: center; color: var(--text-3); font-size: 13px; }
 
 .me-card {
@@ -1260,6 +1265,7 @@ kbd {
         <span data-icon="search"></span>
         <input class="input" id="searchField" placeholder="Поиск">
       </div>
+      <button type="button" class="icon-btn" id="muteBtn" title="Выключить звук"></button>
       <button type="button" class="icon-btn accent" id="addMemberBtn" title="Добавить участника" data-icon="user-plus"></button>
     </div>
 
@@ -1348,6 +1354,9 @@ const ICONS = {
   search: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>',
   "user-plus": '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 19.5c.8-3.3 3.4-5 6.5-5s5.7 1.7 6.5 5"/><path d="M19 8v6M16 11h6"/></svg>',
   "users-plus": '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h10M4 17h7"/><path d="M18 14v6M15 17h6"/></svg>',
+  bell: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>',
+  "bell-off": '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 5.6A6 6 0 0 1 18 11v4.5M18 18H4.5L6 16v-5c0-.9.2-1.8.6-2.6"/><path d="M10 20.5a2 2 0 0 0 4 0"/><path d="M3 3l18 18"/></svg>',
+  "bell-off-sm": '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 5.6A6 6 0 0 1 18 11v4.5M18 18H4.5L6 16v-5c0-.9.2-1.8.6-2.6"/><path d="M10 20.5a2 2 0 0 0 4 0"/><path d="M3 3l18 18"/></svg>',
   logout: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4"/><path d="M10 16l-4-4 4-4M6 12h10"/></svg>',
   send: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
   close: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
@@ -1731,7 +1740,17 @@ function renderChats() {
     text.className = "chat-text";
     const name = document.createElement("div");
     name.className = "chat-name";
-    name.textContent = chatName(chat); // textContent — защита от XSS
+    const nameText = document.createElement("span");
+    nameText.className = "name-text";
+    nameText.textContent = chatName(chat); // textContent — защита от XSS
+    name.append(nameText);
+    if (chat.muted) {
+      const mark = document.createElement("span");
+      mark.className = "mute-mark";
+      mark.title = "Без звука";
+      mark.innerHTML = ICONS["bell-off-sm"];
+      name.append(mark);
+    }
     const sub = document.createElement("div");
     sub.className = "chat-sub";
     sub.textContent = chat.type === "group" ? "Группа" : "Личные сообщения";
@@ -1741,7 +1760,7 @@ function renderChats() {
     const count = state.unread[chat.id] || 0;
     if (count) {
       const badge = document.createElement("span");
-      badge.className = "badge" + (state.badgeSeen[chat.id] !== count ? " pop" : "");
+      badge.className = "badge" + (chat.muted ? " muted" : "") + (!chat.muted && state.badgeSeen[chat.id] !== count ? " pop" : "");
       badge.textContent = count > 99 ? "99+" : count;
       li.append(badge);
     }
@@ -1763,6 +1782,35 @@ function showEmptyChat() {
   renderChats();
 }
 $("backBtn").onclick = showEmptyChat;
+
+function renderMuteBtn() {
+  const chat = state.currentChat;
+  if (!chat) return;
+  const btn = $("muteBtn");
+  btn.innerHTML = ICONS[chat.muted ? "bell-off" : "bell"];
+  btn.classList.toggle("on", !!chat.muted);
+  btn.title = chat.muted ? "Включить звук" : "Выключить звук";
+}
+
+$("muteBtn").onclick = async () => {
+  const chat = state.currentChat;
+  if (!chat || state.muteBusy) return;
+  const muted = !chat.muted;
+  state.muteBusy = true;
+  try {
+    await api("PUT", `/chats/${chat.id}/mute`, { muted });
+    chat.muted = muted;
+    const inList = state.chats.find((c) => c.id === chat.id);
+    if (inList) inList.muted = muted;
+    renderMuteBtn();
+    renderChats();
+    toast(muted ? "Звук чата выключен" : "Звук чата включён", "success");
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    state.muteBusy = false;
+  }
+};
 
 async function openChat(chat) {
   state.currentChat = chat;
@@ -1787,6 +1835,7 @@ async function openChat(chat) {
   $("chatSub").textContent = chatSubtitle(chat);
   $("chatSub").title = "";
   $("addMemberBtn").classList.toggle("hidden", chat.type !== "group");
+  renderMuteBtn();
   $("searchField").value = "";
   restartAnim(document.querySelector("#chatHead .title-wrap"));
   const inner = $("messagesInner");
@@ -2743,7 +2792,8 @@ function connectWS() {
     if (state.currentChat && data.chat_id === state.currentChat.id) {
       addIncoming(data);
     } else if (data.user_id !== state.me.id) {
-      pingLogo();
+      const known = state.chats.find((c) => c.id === data.chat_id);
+      if (!(known && known.muted)) pingLogo();
       state.unread[data.chat_id] = (state.unread[data.chat_id] || 0) + 1;
       if (!state.chats.some((c) => c.id === data.chat_id)) loadChats(); // меня только что добавили
       else renderChats();
