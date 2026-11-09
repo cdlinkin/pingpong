@@ -121,3 +121,35 @@ func (r *Repository) ListMembers(
 
 	return members, nil
 }
+
+func (r *Repository) SetMuted(
+	ctx context.Context,
+	userID, chatID int,
+	muted bool,
+) error {
+	query := `
+	UPDATE chat_members
+	SET muted = $3
+	WHERE chat_id = $1
+	AND user_id = $2;
+	`
+
+	tag, err := r.pool.Exec(
+		ctx,
+		query,
+		chatID,
+		userID,
+		muted,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"set muted: %w",
+			err,
+		)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotMember
+	}
+
+	return nil
+}

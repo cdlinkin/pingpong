@@ -197,6 +197,7 @@ func main() {
 	mux.Handle("POST /chats/{id}/messages/{msgID}/reactions", protected(msgHandler.ToggleReaction))
 	mux.Handle("POST /chats/{id}/attachments", protected(msgHandler.SendAttachment))
 	mux.Handle("GET /attachments/{id}", protected(msgHandler.GetAttachment))
+	mux.Handle("PUT /chats/{id}/mute", protected(chatsHandler.SetMuted))
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

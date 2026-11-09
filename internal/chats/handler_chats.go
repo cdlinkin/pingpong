@@ -178,6 +178,7 @@ func (h *Handler) ListUserChats(rw http.ResponseWriter, r *http.Request) {
 				Title:       c.Title,
 				Type:        c.Type,
 				CreatedAt:   c.CreatedAt,
+				Muted:       c.Muted,
 				UnreadCount: c.UnreadCount,
 				PeerLogin:   c.PeerLogin,
 			},

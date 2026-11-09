@@ -145,7 +145,7 @@ func (r *Repository) ListUserChats(
 	userID int,
 ) ([]ChatModel, error) {
 	query := `
-	SELECT c.id, c.title, c.type, c.created_at,
+	SELECT c.id, c.title, c.type, c.created_at, m.muted,
 	(SELECT COUNT(*)
 	FROM messages msg
 	WHERE msg.chat_id = c.id
@@ -182,6 +182,7 @@ func (r *Repository) ListUserChats(
 			&c.Title,
 			&c.Type,
 			&c.CreatedAt,
+			&c.Muted,
 			&c.UnreadCount,
 			&c.PeerLogin,
 		); err != nil {

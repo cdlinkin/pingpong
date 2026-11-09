@@ -2,6 +2,7 @@ package chats
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -67,4 +68,23 @@ func (s *Service) ListMembers(
 	}
 
 	return members, nil
+}
+
+func (s *Service) SetMuted(
+	ctx context.Context,
+	userID, chatID int,
+	muted bool,
+) error {
+	if err := s.repository.SetMuted(ctx, userID, chatID, muted); err != nil {
+		if errors.Is(err, ErrNotMember) {
+			return ErrChatNotFound
+		}
+
+		return fmt.Errorf(
+			"set muted: %w",
+			err,
+		)
+	}
+
+	return nil
 }

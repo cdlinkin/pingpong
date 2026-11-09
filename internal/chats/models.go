@@ -9,6 +9,7 @@ type ChatModel struct {
 	CreatedAt   time.Time
 	UnreadCount int
 	PeerLogin   *string
+	Muted       bool
 }
 
 type MemberModel struct {

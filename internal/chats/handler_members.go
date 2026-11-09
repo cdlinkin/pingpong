@@ -201,3 +201,62 @@ func (h *Handler) ListMembers(rw http.ResponseWriter, r *http.Request) {
 		h.logger.Warn("list members: encode response", "err", err)
 	}
 }
+
+// SetMuted godoc
+//
+//	@Summary		Включить или выключить звук чата
+//	@Description	Личная настройка участника: заглушённый чат не присылает уведомлений, но сообщения и счётчик непрочитанных работают как обычно. Повторный запрос с тем же значением ничего не ломает. Если вы не участник чата, ответ 404.
+//	@Tags			chats
+//	@Accept			json
+//	@Security		BearerAuth
+//	@Param			id		path	int			true	"ID чата"
+//	@Param			request	body	muteRequest	true	"true — заглушить, false — вернуть звук"
+//	@Success		204		"Настройка сохранена"
+//	@Failure		400		{string}	string	"Невалидный id чата или JSON"
+//	@Failure		401		{string}	string	"invalid token"
+//	@Failure		404		{string}	string	"chat not found"
+//	@Failure		500		{string}	string	"internal error"
+//	@Router			/chats/{id}/mute [put]
+func (h *Handler) SetMuted(rw http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.UserIDFromContext(r.Context())
+	if !ok {
+		http.Error(
+			rw,
+			"unauthorized",
+			http.StatusUnauthorized,
+		)
+		return
+	}
+	chatID, err := httpx.PathInt(r, "id")
+	if err != nil {
+		http.Error(
+			rw,
+			"invalid chat id",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	var req muteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(
+			rw,
+			"invalid JSON",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	if err := h.service.SetMuted(r.Context(), userID, chatID, req.Muted); err != nil {
+		switch {
+		case errors.Is(err, ErrChatNotFound):
+			http.Error(rw, "chat not found", http.StatusNotFound)
+		default:
+			h.logger.Error("set muted", "err", err)
+			http.Error(rw, "internal error", http.StatusInternalServerError)
+		}
+		return
+	}
+
+	rw.WriteHeader(http.StatusNoContent)
+}

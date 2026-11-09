@@ -32,6 +32,9 @@ definitions:
       id:
         example: 13
         type: integer
+      muted:
+        example: false
+        type: boolean
       peer_login:
         example: sonya
         type: string
@@ -153,6 +156,12 @@ definitions:
       reply_to_id:
         example: 118
         type: integer
+    type: object
+  MuteRequest:
+    properties:
+      muted:
+        example: false
+        type: boolean
     type: object
   Reaction:
     properties:
@@ -851,6 +860,49 @@ paths:
       summary: Поиск по сообщениям
       tags:
       - messages
+  /chats/{id}/mute:
+    put:
+      consumes:
+      - application/json
+      description: 'Личная настройка участника: заглушённый чат не присылает уведомлений,
+        но сообщения и счётчик непрочитанных работают как обычно. Повторный запрос
+        с тем же значением ничего не ломает. Если вы не участник чата, ответ 404.'
+      parameters:
+      - description: ID чата
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: true — заглушить, false — вернуть звук
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/MuteRequest'
+      responses:
+        "204":
+          description: Настройка сохранена
+        "400":
+          description: Невалидный id чата или JSON
+          schema:
+            type: string
+        "401":
+          description: invalid token
+          schema:
+            type: string
+        "404":
+          description: chat not found
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Включить или выключить звук чата
+      tags:
+      - chats
   /chats/{id}/read:
     post:
       consumes:
