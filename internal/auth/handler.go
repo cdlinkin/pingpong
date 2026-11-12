@@ -73,12 +73,12 @@ func (h *Handler) Register(rw http.ResponseWriter, r *http.Request) {
 // Login godoc
 //
 //	@Summary		Вход
-//	@Description	Проверяет email и пароль и выдаёт JWT (HS256, живёт 24 часа). Токен передаётся в заголовке `Authorization: Bearer <token>`.
+//	@Description	Проверяет email и пароль и выдаёт пару токенов. `token` — access JWT (HS256, живёт 15 минут), передаётся в заголовке `Authorization: Bearer <token>`. `refresh_token` живёт 30 дней и нужен, чтобы получить новую пару через `POST /refresh`.
 //	@Tags			auth
 //	@Accept			json
 //	@Produce		json
 //	@Param			request	body		loginRequest	true	"Email и пароль"
-//	@Success		200		{object}	loginResponse	"JWT"
+//	@Success		200		{object}	loginResponse	"Пара токенов"
 //	@Failure		400		{string}	string			"Невалидный JSON или данные"
 //	@Failure		401		{string}	string			"invalid email or password"
 //	@Failure		405		{string}	string			"method not allowed"
@@ -111,7 +111,8 @@ func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	response := loginResponse{
-		Token: token,
+		Token:        token.Access,
+		RefreshToken: token.Refresh,
 	}
 
 	if err := httpx.WriteJSON(rw, http.StatusOK, response); err != nil {
@@ -132,7 +133,6 @@ func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 //	@Failure		500	{string}	string		"internal error"
 //	@Router			/me [get]
 func (h *Handler) Me(rw http.ResponseWriter, r *http.Request) {
-
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {
 		http.Error(
@@ -165,4 +165,82 @@ func (h *Handler) Me(rw http.ResponseWriter, r *http.Request) {
 	if err := httpx.WriteJSON(rw, http.StatusOK, response); err != nil {
 		h.logger.Warn("me: encode response", "err", err)
 	}
+}
+
+// Refresh godoc
+//
+//	@Summary		Обновление токенов
+//	@Description	Меняет refresh-токен на новую пару токенов. Старый refresh-токен после этого перестаёт работать (ротация).
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		refreshRequest	true	"Refresh-токен из /login или /refresh"
+//	@Success		200		{object}	loginResponse	"Новая пара токенов"
+//	@Failure		400		{string}	string			"invalid JSON"
+//	@Failure		401		{string}	string			"invalid refresh token"
+//	@Failure		429		{string}	string			"too many requests"
+//	@Failure		500		{string}	string			"internal error"
+//	@Router			/refresh [post]
+func (h *Handler) Refresh(rw http.ResponseWriter, r *http.Request) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(
+			rw,
+			"invalid JSON",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	tokens, err := h.service.Refresh(r.Context(), req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, ErrInvalidRefreshToken) {
+			http.Error(rw, "invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+		h.logger.Error("refresh", "err", err)
+		http.Error(rw, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	response := loginResponse{
+		Token:        tokens.Access,
+		RefreshToken: tokens.Refresh,
+	}
+
+	if err := httpx.WriteJSON(rw, http.StatusOK, response); err != nil {
+		h.logger.Warn("refresh: encode response", "err", err)
+	}
+}
+
+// Logout godoc
+//
+//	@Summary		Выход
+//	@Description	Удаляет refresh-токен. Access-токен не нужен. Повторный выход тоже возвращает 204.
+//	@Tags			auth
+//	@Accept			json
+//	@Param			request	body	refreshRequest	true	"Refresh-токен"
+//	@Success		204		"Токен удалён"
+//	@Failure		400		{string}	string	"invalid JSON"
+//	@Failure		429		{string}	string	"too many requests"
+//	@Failure		500		{string}	string	"internal error"
+//	@Router			/logout [post]
+func (h *Handler) Logout(rw http.ResponseWriter, r *http.Request) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(
+			rw,
+			"invalid JSON",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	if err := h.service.Logout(r.Context(), req.RefreshToken); err != nil {
+		h.logger.Error("logout", "err", err)
+		http.Error(rw, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	rw.WriteHeader(http.StatusNoContent)
 }

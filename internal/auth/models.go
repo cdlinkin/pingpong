@@ -9,3 +9,8 @@ type UserModel struct {
 	PasswordHash string
 	CreatedAt    time.Time
 }
+
+type TokenPair struct {
+	Access  string
+	Refresh string
+}

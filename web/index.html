@@ -1456,6 +1456,7 @@ const EMOJI = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F62E}", "\u{1F622}
 
 const state = {
   token: localStorage.getItem("token"),
+  refresh: localStorage.getItem("refresh"),
   me: null,
   chats: [],
   currentChat: null,
@@ -1486,21 +1487,78 @@ const $ = (id) => document.getElementById(id);
 // =====================================================================
 //  API: fetch + токен + разбор ошибок
 // =====================================================================
+function setTokens(data) {
+  state.token = data.token;
+  state.refresh = data.refresh_token || null;
+  try {
+    localStorage.setItem("token", state.token);
+    if (state.refresh) localStorage.setItem("refresh", state.refresh);
+    else localStorage.removeItem("refresh");
+  } catch (e) {}
+}
+
+let refreshing = null;
+function refreshTokens() {
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
+    const stored = localStorage.getItem("refresh");
+    if (stored && stored !== state.refresh) {
+      state.token = localStorage.getItem("token");
+      state.refresh = stored;
+      return true;
+    }
+    if (!state.refresh) return false;
+    try {
+      const res = await fetch("/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: state.refresh }),
+      });
+      if (!res.ok) return false;
+      setTokens(await res.json());
+      return true;
+    } catch (e) {
+      return false;
+    }
+  })().finally(() => { refreshing = null; });
+  return refreshing;
+}
+
+function tokenExpiresSoon() {
+  try {
+    const payload = JSON.parse(atob(state.token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return payload.exp * 1000 - Date.now() < 30000;
+  } catch (e) {
+    return true;
+  }
+}
+
+async function authFetch(path, opts = {}) {
+  const send = () => fetch(path, {
+    ...opts,
+    headers: { ...(opts.headers || {}), ...(state.token ? { Authorization: "Bearer " + state.token } : {}) },
+  });
+  let res = await send();
+  if (res.status === 401 && state.token) {
+    if (await refreshTokens()) res = await send();
+    if (res.status === 401) {
+      logout();
+      throw new Error("Сессия истекла, войдите снова");
+    }
+  }
+  return res;
+}
+
 async function api(method, path, body) {
   const headers = {};
-  if (state.token) headers["Authorization"] = "Bearer " + state.token;
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
-  const res = await fetch(path, {
+  const res = await authFetch(path, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  if (res.status === 401 && state.token) {
-    logout();
-    throw new Error("Сессия истекла, войдите снова");
-  }
   if (!res.ok) {
     const text = (await res.text()).trim(); // http.Error отдаёт обычный текст
     throw new Error(humanError(text) || "Ошибка " + res.status);
@@ -1596,8 +1654,7 @@ $("authForm").onsubmit = async (e) => {
       await api("POST", "/register", { login: $("loginField").value.trim(), email, password });
     }
     const data = await api("POST", "/login", { email, password });
-    state.token = data.token;
-    localStorage.setItem("token", data.token);
+    setTokens(data);
     $("passwordField").value = "";
     await start();
   } catch (err) {
@@ -1609,8 +1666,19 @@ $("authForm").onsubmit = async (e) => {
 };
 
 function logout() {
+  if (state.refresh) {
+    fetch("/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: state.refresh }),
+    }).catch(() => {});
+  }
   state.token = null;
-  localStorage.removeItem("token");
+  state.refresh = null;
+  try {
+    localStorage.removeItem("token");
+    localStorage.removeItem("refresh");
+  } catch (e) {}
   if (state.ws) {
     state.ws.onclose = null;
     state.ws.close();
@@ -2627,7 +2695,7 @@ function imageBox(w, h) {
 
 function loadAttachment(a) {
   if (!blobCache.has(a.id)) {
-    const p = fetch(a.url, { headers: { Authorization: "Bearer " + state.token } })
+    const p = authFetch(a.url)
       .then((res) => {
         if (!res.ok) throw new Error(res.status === 404 ? "Файл не найден или сообщение удалено" : "Не удалось загрузить файл");
         return res.blob();
@@ -2804,7 +2872,7 @@ function clearPendingFile() {
   autosize();
 }
 
-function uploadFile(chat, file, caption, replyTo) {
+function uploadFile(chat, file, caption, replyTo, retried) {
   const form = new FormData();
   form.append("file", file);
   if (caption) form.append("message", caption);
@@ -2823,8 +2891,17 @@ function uploadFile(chat, file, caption, replyTo) {
     };
     xhr.onload = () => {
       if (xhr.status === 401) {
-        logout();
-        return reject(new Error("Сессия истекла, войдите снова"));
+        if (retried) {
+          logout();
+          return reject(new Error("Сессия истекла, войдите снова"));
+        }
+        return refreshTokens().then((ok) => {
+          if (!ok) {
+            logout();
+            return reject(new Error("Сессия истекла, войдите снова"));
+          }
+          uploadFile(chat, file, caption, replyTo, true).then(resolve, reject);
+        });
       }
       if (xhr.status >= 200 && xhr.status < 300) return resolve(JSON.parse(xhr.responseText));
       reject(new Error(humanError(xhr.responseText.trim()) || "Ошибка " + xhr.status));
@@ -2912,7 +2989,12 @@ function setWsStatus(online) {
   $("wsText").textContent = online ? "В сети" : "Нет связи…";
 }
 
-function connectWS() {
+async function connectWS() {
+  if (tokenExpiresSoon() && !(await refreshTokens())) {
+    logout();
+    return;
+  }
+  if (!state.token) return;
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const ws = new WebSocket(`${proto}//${location.host}/ws?token=${encodeURIComponent(state.token)}`);
   state.ws = ws;

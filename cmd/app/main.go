@@ -83,7 +83,7 @@ func health(rw http.ResponseWriter, r *http.Request) {
 //	@version		1.0
 //	@description	REST API веб-мессенджера PingPong: регистрация и JWT-авторизация, личные и групповые чаты, сообщения с курсорной пагинацией и поиском, доставка в реальном времени через WebSocket.
 //	@description
-//	@description	**Как авторизоваться:** выполните `POST /login`, нажмите **Authorize** и вставьте `Bearer <token>`.
+//	@description	**Как авторизоваться:** выполните `POST /login`, нажмите **Authorize** и вставьте `Bearer <token>`. Токен живёт 15 минут, новую пару выдаёт `POST /refresh`.
 //	@description
 //	@description	**Ошибки** возвращаются обычным текстом (`text/plain`), например `chat not found`. Если вы не участник чата, API отвечает 404, чтобы не раскрывать, что чат существует.
 //	@host			localhost:8080
@@ -198,6 +198,8 @@ func main() {
 	mux.Handle("POST /chats/{id}/attachments", protected(msgHandler.SendAttachment))
 	mux.Handle("GET /attachments/{id}", protected(msgHandler.GetAttachment))
 	mux.Handle("PUT /chats/{id}/mute", protected(chatsHandler.SetMuted))
+	mux.Handle("POST /refresh", authLimit.ByIP(http.HandlerFunc(handler.Refresh)))
+	mux.Handle("POST /logout", authLimit.ByIP(http.HandlerFunc(handler.Logout)))
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

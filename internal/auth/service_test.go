@@ -3,18 +3,45 @@ package auth
 import (
 	"context"
 	"errors"
+	"strconv"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
+type fakeRefresh struct {
+	userID    int
+	expiresAt time.Time
+}
+
 type fakeRepo struct {
 	users     map[string]UserModel
 	createErr error
+	refresh   map[string]fakeRefresh
 }
 
 func newFakeRepo() *fakeRepo {
-	return &fakeRepo{users: make(map[string]UserModel)}
+	return &fakeRepo{users: make(map[string]UserModel), refresh: make(map[string]fakeRefresh)}
+}
+
+func (f *fakeRepo) SaveRefreshToken(ctx context.Context, userID int, hash string, expiresAt time.Time) error {
+	f.refresh[hash] = fakeRefresh{userID: userID, expiresAt: expiresAt}
+	return nil
+}
+
+func (f *fakeRepo) ConsumeRefreshToken(ctx context.Context, hash string) (int, error) {
+	rt, ok := f.refresh[hash]
+	if !ok || !rt.expiresAt.After(time.Now()) {
+		return 0, ErrInvalidRefreshToken
+	}
+	delete(f.refresh, hash)
+	return rt.userID, nil
+}
+
+func (f *fakeRepo) DeleteRefreshToken(ctx context.Context, hash string) error {
+	delete(f.refresh, hash)
+	return nil
 }
 
 func (f *fakeRepo) CreateUser(ctx context.Context, login, email, passwordHash string) (int, error) {
@@ -114,11 +141,14 @@ func TestLogin(t *testing.T) {
 	}
 
 	t.Run("ok returns token with user id", func(t *testing.T) {
-		token, err := svc.Login(ctx, "KURO@mail.ru", "password123")
+		tokens, err := svc.Login(ctx, "KURO@mail.ru", "password123")
 		if err != nil {
 			t.Fatalf("login: %v", err)
 		}
-		id, err := ParseToken(token, testSecret)
+		if tokens.Refresh == "" {
+			t.Fatal("want refresh token")
+		}
+		id, err := ParseToken(tokens.Access, testSecret)
 		if err != nil {
 			t.Fatalf("parse token: %v", err)
 		}
@@ -160,5 +190,101 @@ func TestMe(t *testing.T) {
 
 	if _, err := svc.Me(ctx, 999); !errors.Is(err, ErrUserNotFound) {
 		t.Fatalf("want ErrUserNotFound, got %v", err)
+	}
+}
+
+func TestRefresh(t *testing.T) {
+	ctx := context.Background()
+
+	login := func(t *testing.T) (*fakeRepo, *Service, int, TokenPair) {
+		t.Helper()
+		repo := newFakeRepo()
+		svc := NewService(repo, testSecret)
+		userID, err := svc.Register(ctx, "kuroame", "kuro@mail.ru", "password123")
+		if err != nil {
+			t.Fatalf("register: %v", err)
+		}
+		tokens, err := svc.Login(ctx, "kuro@mail.ru", "password123")
+		if err != nil {
+			t.Fatalf("login: %v", err)
+		}
+		return repo, svc, userID, tokens
+	}
+
+	t.Run("refresh is stored as hash", func(t *testing.T) {
+		repo, _, _, tokens := login(t)
+		if _, ok := repo.refresh[tokens.Refresh]; ok {
+			t.Fatal("raw refresh token must not be stored")
+		}
+		if _, ok := repo.refresh[hashToken(tokens.Refresh)]; !ok {
+			t.Fatal("hash of refresh token must be stored")
+		}
+	})
+
+	t.Run("ok gives new pair and rotates refresh", func(t *testing.T) {
+		_, svc, userID, tokens := login(t)
+		next, err := svc.Refresh(ctx, tokens.Refresh)
+		if err != nil {
+			t.Fatalf("refresh: %v", err)
+		}
+		if next.Refresh == tokens.Refresh {
+			t.Fatal("refresh token must rotate")
+		}
+		id, err := ParseToken(next.Access, testSecret)
+		if err != nil || id != userID {
+			t.Fatalf("want access for user %d, got %d (%v)", userID, id, err)
+		}
+		if _, err := svc.Refresh(ctx, tokens.Refresh); !errors.Is(err, ErrInvalidRefreshToken) {
+			t.Fatalf("old refresh must be dead, got %v", err)
+		}
+		if _, err := svc.Refresh(ctx, next.Refresh); err != nil {
+			t.Fatalf("new refresh must work: %v", err)
+		}
+	})
+
+	t.Run("expired refresh", func(t *testing.T) {
+		repo, svc, _, tokens := login(t)
+		h := hashToken(tokens.Refresh)
+		rt := repo.refresh[h]
+		rt.expiresAt = time.Now().Add(-time.Minute)
+		repo.refresh[h] = rt
+		if _, err := svc.Refresh(ctx, tokens.Refresh); !errors.Is(err, ErrInvalidRefreshToken) {
+			t.Fatalf("want ErrInvalidRefreshToken, got %v", err)
+		}
+	})
+
+	for _, bad := range []string{"", "not-a-token"} {
+		t.Run("bad token "+strconv.Quote(bad), func(t *testing.T) {
+			_, svc, _, _ := login(t)
+			if _, err := svc.Refresh(ctx, bad); !errors.Is(err, ErrInvalidRefreshToken) {
+				t.Fatalf("want ErrInvalidRefreshToken, got %v", err)
+			}
+		})
+	}
+}
+
+func TestLogout(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeRepo()
+	svc := NewService(repo, testSecret)
+	if _, err := svc.Register(ctx, "kuroame", "kuro@mail.ru", "password123"); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+	tokens, err := svc.Login(ctx, "kuro@mail.ru", "password123")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	if err := svc.Logout(ctx, tokens.Refresh); err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+	if _, err := svc.Refresh(ctx, tokens.Refresh); !errors.Is(err, ErrInvalidRefreshToken) {
+		t.Fatalf("refresh after logout: want ErrInvalidRefreshToken, got %v", err)
+	}
+	if err := svc.Logout(ctx, tokens.Refresh); err != nil {
+		t.Fatalf("second logout must be ok: %v", err)
+	}
+	if err := svc.Logout(ctx, ""); err != nil {
+		t.Fatalf("empty logout must be ok: %v", err)
 	}
 }

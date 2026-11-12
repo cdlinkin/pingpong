@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -12,6 +13,10 @@ type repository interface {
 	CreateUser(ctx context.Context, login, email, passwordHash string) (int, error)
 	GetUserByEmail(ctx context.Context, email string) (UserModel, error)
 	GetUserByID(ctx context.Context, id int) (UserModel, error)
+
+	SaveRefreshToken(ctx context.Context, userID int, hash string, expiresAt time.Time) error
+	ConsumeRefreshToken(ctx context.Context, hash string) (int, error)
+	DeleteRefreshToken(ctx context.Context, hash string) error
 }
 
 type Service struct {
@@ -32,10 +37,10 @@ func NewService(
 func (s *Service) Login(
 	ctx context.Context,
 	email, password string,
-) (string, error) {
+) (TokenPair, error) {
 	email, err := validateEmail(email)
 	if err != nil {
-		return "", fmt.Errorf(
+		return TokenPair{}, fmt.Errorf(
 			"validate 'email': %w",
 			err,
 		)
@@ -44,19 +49,19 @@ func (s *Service) Login(
 	userModel, err := s.repository.GetUserByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
-			return "", ErrInvalidCredentials
+			return TokenPair{}, ErrInvalidCredentials
 		}
-		return "", fmt.Errorf(
+		return TokenPair{}, fmt.Errorf(
 			"get user by email: %w",
 			err,
 		)
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(userModel.PasswordHash), []byte(password)); err != nil {
-		return "", ErrInvalidCredentials
+		return TokenPair{}, ErrInvalidCredentials
 	}
 
-	return createToken(userModel.ID, s.jwtSecret)
+	return s.issueTokens(ctx, userModel.ID)
 }
 
 func (s *Service) Register(
@@ -104,6 +109,40 @@ func (s *Service) Register(
 	return userID, nil
 }
 
+func (s *Service) Refresh(ctx context.Context, refresh string) (TokenPair, error) {
+	if refresh == "" {
+		return TokenPair{}, ErrInvalidRefreshToken
+	}
+
+	userID, err := s.repository.ConsumeRefreshToken(ctx, hashToken(refresh))
+	if err != nil {
+		if errors.Is(err, ErrInvalidRefreshToken) {
+			return TokenPair{}, ErrInvalidRefreshToken
+		}
+		return TokenPair{}, fmt.Errorf(
+			"consume refresh token: %w",
+			err,
+		)
+	}
+
+	return s.issueTokens(ctx, userID)
+}
+
+func (s *Service) Logout(ctx context.Context, refresh string) error {
+	if refresh == "" {
+		return nil
+	}
+
+	if err := s.repository.DeleteRefreshToken(ctx, hashToken(refresh)); err != nil {
+		return fmt.Errorf(
+			"delete refresh token: %w",
+			err,
+		)
+	}
+
+	return nil
+}
+
 func (s *Service) Me(ctx context.Context, userID int) (UserModel, error) {
 	user, err := s.repository.GetUserByID(ctx, userID)
 	if err != nil {
@@ -122,4 +161,31 @@ func hashPassword(password string) (string, error) {
 		return "", err
 	}
 	return string(passwordHash), nil
+}
+
+func (s *Service) issueTokens(ctx context.Context, userID int) (TokenPair, error) {
+	access, err := createToken(userID, s.jwtSecret)
+	if err != nil {
+		return TokenPair{}, fmt.Errorf(
+			"create access token: %w",
+			err,
+		)
+	}
+
+	refresh, err := newRefreshToken()
+	if err != nil {
+		return TokenPair{}, err
+	}
+
+	if err := s.repository.SaveRefreshToken(ctx, userID, hashToken(refresh), time.Now().Add(refreshTTL)); err != nil {
+		return TokenPair{}, fmt.Errorf(
+			"save refresh token: %w",
+			err,
+		)
+	}
+
+	return TokenPair{
+		Access:  access,
+		Refresh: refresh,
+	}, nil
 }

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"encoding/hex"
 	"strconv"
 	"testing"
 	"time"
@@ -62,5 +63,60 @@ func TestParseTokenErrors(t *testing.T) {
 				t.Fatal("want error, got nil")
 			}
 		})
+	}
+}
+
+func TestAccessTokenTTL(t *testing.T) {
+	token, err := createToken(1, testSecret)
+	if err != nil {
+		t.Fatalf("create token: %v", err)
+	}
+
+	claims := &jwt.RegisteredClaims{}
+	if _, err := jwt.ParseWithClaims(token, claims, func(*jwt.Token) (any, error) { return testSecret, nil }); err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	left := time.Until(claims.ExpiresAt.Time)
+	if left > accessTTL || left < accessTTL-time.Minute {
+		t.Fatalf("want token to live about %v, got %v", accessTTL, left)
+	}
+}
+
+func TestNewRefreshToken(t *testing.T) {
+	a, err := newRefreshToken()
+	if err != nil {
+		t.Fatalf("new refresh token: %v", err)
+	}
+	b, err := newRefreshToken()
+	if err != nil {
+		t.Fatalf("new refresh token: %v", err)
+	}
+
+	if len(a) != 64 {
+		t.Fatalf("want 64 hex chars, got %d", len(a))
+	}
+	if _, err := hex.DecodeString(a); err != nil {
+		t.Fatalf("not hex: %v", err)
+	}
+	if a == b {
+		t.Fatal("two tokens must differ")
+	}
+}
+
+func TestHashToken(t *testing.T) {
+	h := hashToken("abc")
+
+	if h != hashToken("abc") {
+		t.Fatal("same token must give same hash")
+	}
+	if h == hashToken("abd") {
+		t.Fatal("different tokens must give different hashes")
+	}
+	if h == "abc" || len(h) != 64 {
+		t.Fatalf("want 64-char sha256 hex, got %q", h)
+	}
+	if h != "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad" {
+		t.Fatalf("unexpected sha256: %s", h)
 	}
 }
