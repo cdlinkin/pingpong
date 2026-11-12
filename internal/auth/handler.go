@@ -111,7 +111,8 @@ func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 	}
 
 	response := loginResponse{
-		Token: token,
+		Token:        token.Access,
+		RefreshToken: token.Refresh,
 	}
 
 	if err := httpx.WriteJSON(rw, http.StatusOK, response); err != nil {
@@ -132,7 +133,6 @@ func (h *Handler) Login(rw http.ResponseWriter, r *http.Request) {
 //	@Failure		500	{string}	string		"internal error"
 //	@Router			/me [get]
 func (h *Handler) Me(rw http.ResponseWriter, r *http.Request) {
-
 	userID, ok := UserIDFromContext(r.Context())
 	if !ok {
 		http.Error(
@@ -165,4 +165,56 @@ func (h *Handler) Me(rw http.ResponseWriter, r *http.Request) {
 	if err := httpx.WriteJSON(rw, http.StatusOK, response); err != nil {
 		h.logger.Warn("me: encode response", "err", err)
 	}
+}
+
+func (h *Handler) Refresh(rw http.ResponseWriter, r *http.Request) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(
+			rw,
+			"invalid JSON",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	tokens, err := h.service.Refresh(r.Context(), req.RefreshToken)
+	if err != nil {
+		if errors.Is(err, ErrInvalidRefreshToken) {
+			http.Error(rw, "invalid refresh token", http.StatusUnauthorized)
+			return
+		}
+		h.logger.Error("refresh", "err", err)
+		http.Error(rw, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	response := loginResponse{
+		Token:        tokens.Access,
+		RefreshToken: tokens.Refresh,
+	}
+
+	if err := httpx.WriteJSON(rw, http.StatusOK, response); err != nil {
+		h.logger.Warn("refresh: encode response", "err", err)
+	}
+}
+
+func (h *Handler) Logout(rw http.ResponseWriter, r *http.Request) {
+	var req refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(
+			rw,
+			"invalid JSON",
+			http.StatusBadRequest,
+		)
+		return
+	}
+
+	if err := h.service.Logout(r.Context(), req.RefreshToken); err != nil {
+		h.logger.Error("logout", "err", err)
+		http.Error(rw, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	rw.WriteHeader(http.StatusNoContent)
 }

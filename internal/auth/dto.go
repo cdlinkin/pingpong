@@ -18,7 +18,8 @@ type registerResponse struct {
 } //@name RegisterResponse
 
 type loginResponse struct {
-	Token string `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+	Token        string `json:"token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
+	RefreshToken string `json:"refresh_token" example:"9f2c4e7a1b..."`
 } //@name LoginResponse
 
 type meResponse struct {
@@ -27,3 +28,7 @@ type meResponse struct {
 	Email     string    `json:"email" example:"kuroame@example.com"`
 	CreatedAt time.Time `json:"created_at" example:"2026-10-20T18:30:00Z"`
 } //@name User
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token" example:"9f2c4e7a1b..."`
+}

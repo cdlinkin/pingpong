@@ -198,6 +198,8 @@ func main() {
 	mux.Handle("POST /chats/{id}/attachments", protected(msgHandler.SendAttachment))
 	mux.Handle("GET /attachments/{id}", protected(msgHandler.GetAttachment))
 	mux.Handle("PUT /chats/{id}/mute", protected(chatsHandler.SetMuted))
+	mux.Handle("POST /refresh", authLimit.ByIP(http.HandlerFunc(handler.Refresh)))
+	mux.Handle("POST /logout", authLimit.ByIP(http.HandlerFunc(handler.Logout)))
 
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,

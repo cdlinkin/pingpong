@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -111,4 +112,69 @@ func (r *Repository) GetUserByID(
 	}
 
 	return user, nil
+}
+
+func (r *Repository) SaveRefreshToken(
+	ctx context.Context,
+	userID int,
+	hash string,
+	expiresAt time.Time,
+) error {
+	query := `
+	INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+	VALUES ($1, $2, $3);
+	`
+
+	_, err := r.pool.Exec(ctx, query, userID, hash, expiresAt)
+	if err != nil {
+		return fmt.Errorf(
+			"save refresh token: %w",
+			err,
+		)
+	}
+
+	return nil
+}
+
+func (r *Repository) ConsumeRefreshToken(
+	ctx context.Context,
+	hash string,
+) (int, error) {
+	query := `
+	DELETE FROM refresh_tokens
+	WHERE token_hash = $1 AND expires_at > now()
+	RETURNING user_id;
+	`
+
+	var userID int
+	if err := r.pool.QueryRow(ctx, query, hash).Scan(&userID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, ErrInvalidRefreshToken
+		}
+		return 0, fmt.Errorf(
+			"consume refresh token: %w",
+			err,
+		)
+	}
+
+	return userID, nil
+}
+
+func (r *Repository) DeleteRefreshToken(
+	ctx context.Context,
+	hash string,
+) error {
+	query := `
+	DELETE FROM refresh_tokens WHERE token_hash = $1;
+	`
+
+	_, err := r.pool.Exec(ctx, query, hash)
+	if err != nil {
+		return fmt.Errorf(
+			"delete refresh token: %w",
+			err,
+		)
+	}
+
+	return nil
 }
