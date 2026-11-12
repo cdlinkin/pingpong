@@ -36,6 +36,10 @@ func (s *Service) SendMessage(
 		)
 	}
 
+	if err := s.addMentions(ctx, &msgModel); err != nil {
+		return MessageModel{}, err
+	}
+
 	return msgModel, nil
 }
 
@@ -88,6 +92,10 @@ func (s *Service) ListMessage(
 	}
 
 	if err := s.fillAttachments(ctx, messages, ids); err != nil {
+		return nil, err
+	}
+
+	if err := s.fillMentions(ctx, messages, ids); err != nil {
 		return nil, err
 	}
 

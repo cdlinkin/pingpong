@@ -58,6 +58,7 @@ func toResponse(m MessageModel) msgResponse {
 		CreatedAt: m.CreatedAt,
 		EditedAt:  m.EditedAt,
 		Deleted:   m.DeletedAt != nil,
+		Mentions:  m.Mentions,
 	}
 
 	if len(m.Reactions) > 0 {

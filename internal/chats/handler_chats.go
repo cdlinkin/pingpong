@@ -174,13 +174,14 @@ func (h *Handler) ListUserChats(rw http.ResponseWriter, r *http.Request) {
 	for _, c := range chats {
 		response = append(response,
 			chatResponse{
-				ID:          c.ID,
-				Title:       c.Title,
-				Type:        c.Type,
-				CreatedAt:   c.CreatedAt,
-				Muted:       c.Muted,
-				UnreadCount: c.UnreadCount,
-				PeerLogin:   c.PeerLogin,
+				ID:             c.ID,
+				Title:          c.Title,
+				Type:           c.Type,
+				CreatedAt:      c.CreatedAt,
+				Muted:          c.Muted,
+				UnreadCount:    c.UnreadCount,
+				PeerLogin:      c.PeerLogin,
+				UnreadMentions: c.UnreadMentions,
 			},
 		)
 	}

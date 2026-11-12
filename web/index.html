@@ -944,7 +944,34 @@ section#chat { position: relative; flex: 1; display: flex; flex-direction: colum
 }
 
 /* ---------- поле отправки ---------- */
-.composer-wrap { padding: 8px 24px 20px; }
+.composer-wrap { padding: 8px 24px 20px; position: relative; }
+.mention { font-weight: 700; background: color-mix(in srgb, var(--text) 9%, transparent); border-radius: 5px; padding: 0 3px; }
+.mention.me { background: var(--accent); color: var(--on-accent); }
+.msg-row.mine .bubble .mention { background: color-mix(in srgb, var(--mine-text) 18%, transparent); }
+.msg-row.mentions-me .bubble { box-shadow: 0 0 0 1.5px var(--accent), var(--shadow-sm); }
+.badge.at { font-size: 13px; font-weight: 800; padding: 0; width: 22px; }
+.badge.at + .badge { margin-left: -4px; }
+.mention-pop {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% - 6px);
+  transform: translateX(-50%);
+  width: min(320px, calc(100% - 48px));
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  z-index: 20;
+  animation: pop-in .2s var(--ease);
+}
+.mention-pop .head { padding: 4px 8px 6px; font-size: 11.5px; color: var(--text-3); font-weight: 600; }
+.mention-item { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; }
+.mention-item .avatar { width: 28px; height: 28px; font-size: 11px; }
+.mention-item.active, .mention-item:hover { background: var(--hover-bg); }
+.mention-item .q { color: var(--text-3); font-weight: 500; }
 .edit-bar {
   max-width: 820px;
   margin: 0 auto 8px;
@@ -1294,6 +1321,7 @@ kbd {
         <button type="button" class="icon-btn" id="fileCancel" title="Убрать файл" data-icon="close"></button>
         <div class="file-progress" id="fileProgress"></div>
       </div>
+      <div class="mention-pop hidden" id="mentionPop"></div>
       <form class="composer with-attach" id="sendForm">
         <button type="button" class="icon-btn attach-btn" id="attachBtn" title="Прикрепить файл до 10 МБ" data-icon="clip"></button>
         <input type="file" id="fileInput" hidden accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,application/zip,text/plain,.zip,.txt,.pdf">
@@ -1435,6 +1463,8 @@ const state = {
   hasMore: false,      // есть ли ещё старые сообщения на сервере
   searchQuery: "",
   unread: {},
+  mentions: {},
+  mention: null,
   ws: null,
   editing: null,       // сообщение, которое сейчас редактируем
   replyTo: null,       // сообщение, на которое отвечаем
@@ -1698,8 +1728,11 @@ async function loadChats() {
     state.chats = await api("GET", "/chats");
     // счётчики непрочитанных теперь считает сервер
     state.unread = {};
+    state.mentions = {};
     for (const c of state.chats) {
-      if (c.unread_count && !(state.currentChat && state.currentChat.id === c.id)) state.unread[c.id] = c.unread_count;
+      const open = state.currentChat && state.currentChat.id === c.id;
+      if (c.unread_count && !open) state.unread[c.id] = c.unread_count;
+      if (c.unread_mentions && !open) state.mentions[c.id] = c.unread_mentions;
     }
     renderChats();
   } catch (err) {
@@ -1758,6 +1791,13 @@ function renderChats() {
     li.append(av, text);
 
     const count = state.unread[chat.id] || 0;
+    if (state.mentions[chat.id]) {
+      const at = document.createElement("span");
+      at.className = "badge at";
+      at.title = "Вас упомянули";
+      at.textContent = "@";
+      li.append(at);
+    }
     if (count) {
       const badge = document.createElement("span");
       badge.className = "badge" + (chat.muted ? " muted" : "") + (!chat.muted && state.badgeSeen[chat.id] !== count ? " pop" : "");
@@ -1824,6 +1864,8 @@ async function openChat(chat) {
   stopReplying();
   clearPendingFile();
   delete state.unread[chat.id];
+  delete state.mentions[chat.id];
+  closeMentionPop();
   renderChats();
 
   $("app").classList.add("in-chat");
@@ -1928,6 +1970,7 @@ function messageRow(m, cont, highlight) {
   av.textContent = mine ? initials(state.me.login) : state.members[m.user_id] ? initials(state.members[m.user_id]) : String(m.user_id).slice(0, 3);
   if (m.id === state.enterId) row.classList.add("enter");
   if (m.id === state.deletedId) row.classList.add("just-deleted");
+  if (!m.deleted && m.mentions && m.mentions.includes(state.me.id)) row.classList.add("mentions-me");
 
   const body = document.createElement("div");
   body.className = "msg-body";
@@ -1960,7 +2003,7 @@ function messageRow(m, cont, highlight) {
   }
   if (m.deleted) bubble.append(document.createTextNode("Сообщение удалено"));
   else if (highlight) appendHighlighted(textBox, m.message, highlight);
-  else if (m.message) textBox.append(document.createTextNode(m.message));
+  else if (m.message) appendMentions(textBox, m.message);
   const t = document.createElement("span");
   t.className = "t" + (att && isImage(att) && !m.message ? " over" : "");
   t.textContent = timeStr(m.created_at);
@@ -2135,6 +2178,93 @@ function messageActions(m, mine) {
 }
 
 // Подсветка найденного текста без innerHTML (безопасно)
+// ---------- упоминания ----------
+const MENTION_RE = /(^|[^\p{L}\p{N}_])@([\p{L}\p{N}_.\-]{3,25})/gu;
+
+function knownLogins() {
+  const set = new Set(Object.values(state.members));
+  if (state.me) set.add(state.me.login);
+  return set;
+}
+
+function appendMentions(el, text) {
+  const known = knownLogins();
+  let last = 0;
+  for (const match of text.matchAll(MENTION_RE)) {
+    const login = match[2].replace(/\.+$/, "");
+    if (!known.has(login)) continue;
+    const at = match.index + match[1].length;
+    el.append(document.createTextNode(text.slice(last, at)));
+    const span = document.createElement("span");
+    span.className = "mention" + (state.me && login === state.me.login ? " me" : "");
+    span.textContent = "@" + login;
+    el.append(span);
+    last = at + 1 + login.length;
+  }
+  el.append(document.createTextNode(text.slice(last)));
+}
+
+function mentionQuery() {
+  const caret = field.selectionStart;
+  if (caret !== field.selectionEnd) return null;
+  const m = field.value.slice(0, caret).match(/(?:^|[^\p{L}\p{N}_])@([\p{L}\p{N}_.\-]{0,25})$/u);
+  if (!m) return null;
+  return { start: caret - m[1].length - 1, end: caret, q: m[1].toLowerCase() };
+}
+
+function updateMentionPop() {
+  const pop = $("mentionPop");
+  const query = state.currentChat && !state.searchQuery ? mentionQuery() : null;
+  const items = !query ? [] : Object.entries(state.members)
+    .filter(([id, login]) => Number(id) !== state.me.id && login.toLowerCase().startsWith(query.q))
+    .map(([id, login]) => ({ id: Number(id), login }))
+    .sort((a, b) => a.login.localeCompare(b.login))
+    .slice(0, 6);
+  if (!items.length) return closeMentionPop();
+  const prev = state.mention && state.mention.items[state.mention.index];
+  const keep = prev ? items.findIndex((x) => x.id === prev.id) : -1;
+  state.mention = { ...query, items, index: keep >= 0 ? keep : 0 };
+  pop.innerHTML = '<div class="head">Упомянуть участника</div>';
+  items.forEach((it, i) => {
+    const row = document.createElement("div");
+    row.className = "mention-item" + (i === state.mention.index ? " active" : "");
+    const av = document.createElement("div");
+    av.className = "avatar";
+    av.textContent = initials(it.login);
+    const name = document.createElement("span");
+    const typed = it.login.slice(0, query.q.length);
+    name.append(document.createTextNode("@" + typed));
+    const rest = document.createElement("span");
+    rest.className = "q";
+    rest.textContent = it.login.slice(query.q.length);
+    name.append(rest);
+    row.append(av, name);
+    row.onmousedown = (e) => { e.preventDefault(); pickMention(i); };
+    pop.append(row);
+  });
+  pop.classList.remove("hidden");
+}
+
+function closeMentionPop() {
+  state.mention = null;
+  $("mentionPop").classList.add("hidden");
+}
+
+function pickMention(i) {
+  const st = state.mention;
+  if (!st) return;
+  const login = st.items[i].login;
+  const before = field.value.slice(0, st.start);
+  const after = field.value.slice(st.end);
+  const insert = "@" + login + (after.startsWith(" ") ? "" : " ");
+  field.value = before + insert + after;
+  const pos = before.length + insert.length;
+  field.setSelectionRange(pos, pos);
+  closeMentionPop();
+  autosize();
+  field.focus();
+}
+
 function appendHighlighted(el, text, query) {
   const lower = text.toLowerCase();
   const q = query.toLowerCase();
@@ -2257,7 +2387,11 @@ document.addEventListener("visibilitychange", markRead);
 function applyRead(data) {
   if (data.user_id === state.me.id) {
     // прочитал я сам, например в другой вкладке
-    if (state.unread[data.chat_id]) { delete state.unread[data.chat_id]; renderChats(); }
+    if (state.unread[data.chat_id] || state.mentions[data.chat_id]) {
+      delete state.unread[data.chat_id];
+      delete state.mentions[data.chat_id];
+      renderChats();
+    }
     return;
   }
   if (!state.currentChat || state.currentChat.id !== data.chat_id) return;
@@ -2389,8 +2523,29 @@ function autosize() {
   field.style.height = Math.min(field.scrollHeight, 160) + "px";
   $("sendBtn").disabled = !!state.upload || (!field.value.trim() && !state.pendingFile);
 }
-field.oninput = autosize;
+field.oninput = () => { autosize(); updateMentionPop(); };
+field.onclick = updateMentionPop;
+field.onkeyup = (e) => { if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) updateMentionPop(); };
+field.onblur = closeMentionPop;
 field.onkeydown = (e) => {
+  const st = state.mention;
+  if (st && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+    e.preventDefault();
+    const n = st.items.length;
+    st.index = (st.index + (e.key === "ArrowDown" ? 1 : n - 1)) % n;
+    $("mentionPop").querySelectorAll(".mention-item").forEach((el, i) => el.classList.toggle("active", i === st.index));
+    return;
+  }
+  if (st && (e.key === "Enter" || e.key === "Tab") && !e.isComposing) {
+    e.preventDefault();
+    pickMention(st.index);
+    return;
+  }
+  if (st && e.key === "Escape") {
+    e.preventDefault();
+    closeMentionPop();
+    return;
+  }
   if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
     e.preventDefault();
     $("sendForm").requestSubmit();
@@ -2793,7 +2948,9 @@ function connectWS() {
       addIncoming(data);
     } else if (data.user_id !== state.me.id) {
       const known = state.chats.find((c) => c.id === data.chat_id);
-      if (!(known && known.muted)) pingLogo();
+      const mentioned = !!(data.mentions && data.mentions.includes(state.me.id));
+      if (mentioned) state.mentions[data.chat_id] = (state.mentions[data.chat_id] || 0) + 1;
+      if (mentioned || !(known && known.muted)) pingLogo();
       state.unread[data.chat_id] = (state.unread[data.chat_id] || 0) + 1;
       if (!state.chats.some((c) => c.id === data.chat_id)) loadChats(); // меня только что добавили
       else renderChats();

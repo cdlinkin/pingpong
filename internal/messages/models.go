@@ -16,6 +16,7 @@ type MessageModel struct {
 	ReplyFileName *string
 	Reactions     []ReactionModel
 	Attachment    *AttachmentModel
+	Mentions      []int
 }
 
 type AttachmentModel struct {
@@ -39,4 +40,9 @@ type ReactionModel struct {
 	MsgID  int
 	UserID int
 	Emoji  string
+}
+
+type MentionModel struct {
+	MsgID  int
+	UserID int
 }

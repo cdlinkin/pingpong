@@ -158,7 +158,13 @@ func (r *Repository) ListUserChats(
 	WHERE pm.chat_id = c.id
 	AND pm.user_id <> $1
 	AND c.type = 'direct'
-	LIMIT 1) AS peer_login
+	LIMIT 1) AS peer_login,
+	(SELECT COUNT(*)
+	FROM messages msg
+	JOIN message_mentions mm ON mm.message_id = msg.id AND mm.user_id = $1
+	WHERE msg.chat_id = c.id
+	AND msg.id > m.last_read_message_id
+	AND msg.deleted_at IS NULL) AS unread_mentions
 	FROM chats c
 	JOIN chat_members m ON m.chat_id = c.id
 	WHERE m.user_id = $1
@@ -185,6 +191,7 @@ func (r *Repository) ListUserChats(
 			&c.Muted,
 			&c.UnreadCount,
 			&c.PeerLogin,
+			&c.UnreadMentions,
 		); err != nil {
 			return nil, fmt.Errorf(
 				"scan chat: %w",

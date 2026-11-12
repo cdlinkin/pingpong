@@ -99,6 +99,10 @@ func (s *Service) SendAttachment(
 		)
 	}
 
+	if err := s.addMentions(ctx, &msg); err != nil {
+		return MessageModel{}, err
+	}
+
 	return msg, nil
 }
 

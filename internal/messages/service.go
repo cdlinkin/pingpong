@@ -23,6 +23,8 @@ type repository interface {
 	CreateAttachmentMessage(ctx context.Context, chatID, userID int, caption string, replyToID *int, a AttachmentModel) (MessageModel, error)
 	ListAttachments(ctx context.Context, msgIDs []int) ([]AttachmentModel, error)
 	GetAttachment(ctx context.Context, id int) (AttachmentModel, error)
+	AddMentions(ctx context.Context, msgID, chatID, authorID int, logins []string) ([]int, error)
+	ListMentions(ctx context.Context, msgIDs []int) ([]MentionModel, error)
 }
 
 type FileStorage interface {

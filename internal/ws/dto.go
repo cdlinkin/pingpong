@@ -15,6 +15,7 @@ type outgoingMessage struct {
 	Message   string    `json:"message" example:"Привет!"`
 	CreatedAt time.Time `json:"created_at" example:"2026-10-28T18:34:54Z"`
 	ReplyTo   *replyOut `json:"reply_to,omitempty"`
+	Mentions  []int     `json:"mentions,omitempty" example:"39"`
 } //@name WSOutgoingMessage
 
 type replyOut struct {
