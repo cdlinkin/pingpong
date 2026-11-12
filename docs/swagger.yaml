@@ -51,6 +51,9 @@ definitions:
       unread_count:
         example: 3
         type: integer
+      unread_mentions:
+        example: 1
+        type: integer
     type: object
   CreateChatResponse:
     properties:
@@ -133,6 +136,12 @@ definitions:
       id:
         example: 120
         type: integer
+      mentions:
+        example:
+        - 39
+        items:
+          type: integer
+        type: array
       message:
         example: Привет!
         type: string
@@ -267,6 +276,12 @@ definitions:
       id:
         example: 120
         type: integer
+      mentions:
+        example:
+        - 39
+        items:
+          type: integer
+        type: array
       message:
         example: Привет!
         type: string

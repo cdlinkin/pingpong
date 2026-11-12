@@ -1435,6 +1435,10 @@ const docTemplate = `{
                 "unread_count": {
                     "type": "integer",
                     "example": 3
+                },
+                "unread_mentions": {
+                    "type": "integer",
+                    "example": 1
                 }
             }
         },
@@ -1553,6 +1557,15 @@ const docTemplate = `{
                 "id": {
                     "type": "integer",
                     "example": 120
+                },
+                "mentions": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        39
+                    ]
                 },
                 "message": {
                     "type": "string",
@@ -1742,6 +1755,15 @@ const docTemplate = `{
                 "id": {
                     "type": "integer",
                     "example": 120
+                },
+                "mentions": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    },
+                    "example": [
+                        39
+                    ]
                 },
                 "message": {
                     "type": "string",
