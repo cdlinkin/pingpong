@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"time"
@@ -8,13 +11,33 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const tokenTTL = 24 * time.Hour
+const (
+	accessTTL  = 15 * time.Minute
+	refreshTTL = 30 * 24 * time.Hour
+)
+
+func newRefreshToken() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf(
+			"generate refresh token: %w",
+			err,
+		)
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+func hashToken(token string) string {
+	bytes := sha256.Sum256([]byte(token))
+
+	return hex.EncodeToString(bytes[:])
+}
 
 func createToken(userID int, secret []byte) (string, error) {
 	claims := jwt.RegisteredClaims{
 		Subject:   strconv.Itoa(userID),
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenTTL)),
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTTL)),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(secret)
