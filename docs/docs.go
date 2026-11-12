@@ -1167,7 +1167,7 @@ const docTemplate = `{
         },
         "/login": {
             "post": {
-                "description": "Проверяет email и пароль и выдаёт JWT (HS256, живёт 24 часа). Токен передаётся в заголовке ` + "`" + `Authorization: Bearer \u003ctoken\u003e` + "`" + `.",
+                "description": "Проверяет email и пароль и выдаёт пару токенов. ` + "`" + `token` + "`" + ` — access JWT (HS256, живёт 15 минут), передаётся в заголовке ` + "`" + `Authorization: Bearer \u003ctoken\u003e` + "`" + `. ` + "`" + `refresh_token` + "`" + ` живёт 30 дней и нужен, чтобы получить новую пару через ` + "`" + `POST /refresh` + "`" + `.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1191,7 +1191,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "JWT",
+                        "description": "Пара токенов",
                         "schema": {
                             "$ref": "#/definitions/LoginResponse"
                         }
@@ -1210,6 +1210,52 @@ const docTemplate = `{
                     },
                     "405": {
                         "description": "method not allowed",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/logout": {
+            "post": {
+                "description": "Удаляет refresh-токен. Access-токен не нужен. Повторный выход тоже возвращает 204.",
+                "consumes": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Выход",
+                "parameters": [
+                    {
+                        "description": "Refresh-токен",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Токен удалён"
+                    },
+                    "400": {
+                        "description": "invalid JSON",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "429": {
+                        "description": "too many requests",
                         "schema": {
                             "type": "string"
                         }
@@ -1253,6 +1299,64 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "user not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "internal error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/refresh": {
+            "post": {
+                "description": "Меняет refresh-токен на новую пару токенов. Старый refresh-токен после этого перестаёт работать (ротация).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "summary": "Обновление токенов",
+                "parameters": [
+                    {
+                        "description": "Refresh-токен из /login или /refresh",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/RefreshRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Новая пара токенов",
+                        "schema": {
+                            "$ref": "#/definitions/LoginResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "invalid JSON",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "invalid refresh token",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "429": {
+                        "description": "too many requests",
                         "schema": {
                             "type": "string"
                         }
@@ -1496,6 +1600,10 @@ const docTemplate = `{
         "LoginResponse": {
             "type": "object",
             "properties": {
+                "refresh_token": {
+                    "type": "string",
+                    "example": "9f2c4e7a1b..."
+                },
                 "token": {
                     "type": "string",
                     "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -1648,6 +1756,15 @@ const docTemplate = `{
                 "user_id": {
                     "type": "integer",
                     "example": 39
+                }
+            }
+        },
+        "RefreshRequest": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string",
+                    "example": "9f2c4e7a1b..."
                 }
             }
         },
@@ -1839,7 +1956,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/",
 	Schemes:          []string{"http"},
 	Title:            "PingPong API",
-	Description:      "REST API веб-мессенджера PingPong: регистрация и JWT-авторизация, личные и групповые чаты, сообщения с курсорной пагинацией и поиском, доставка в реальном времени через WebSocket.\n\n**Как авторизоваться:** выполните `POST /login`, нажмите **Authorize** и вставьте `Bearer <token>`.\n\n**Ошибки** возвращаются обычным текстом (`text/plain`), например `chat not found`. Если вы не участник чата, API отвечает 404, чтобы не раскрывать, что чат существует.",
+	Description:      "REST API веб-мессенджера PingPong: регистрация и JWT-авторизация, личные и групповые чаты, сообщения с курсорной пагинацией и поиском, доставка в реальном времени через WebSocket.\n\n**Как авторизоваться:** выполните `POST /login`, нажмите **Authorize** и вставьте `Bearer <token>`. Токен живёт 15 минут, новую пару выдаёт `POST /refresh`.\n\n**Ошибки** возвращаются обычным текстом (`text/plain`), например `chat not found`. Если вы не участник чата, API отвечает 404, чтобы не раскрывать, что чат существует.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

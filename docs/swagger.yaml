@@ -92,6 +92,9 @@ definitions:
     type: object
   LoginResponse:
     properties:
+      refresh_token:
+        example: 9f2c4e7a1b...
+        type: string
       token:
         example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         type: string
@@ -199,6 +202,12 @@ definitions:
       user_id:
         example: 39
         type: integer
+    type: object
+  RefreshRequest:
+    properties:
+      refresh_token:
+        example: 9f2c4e7a1b...
+        type: string
     type: object
   RegisterRequest:
     properties:
@@ -312,7 +321,7 @@ info:
   description: |-
     REST API веб-мессенджера PingPong: регистрация и JWT-авторизация, личные и групповые чаты, сообщения с курсорной пагинацией и поиском, доставка в реальном времени через WebSocket.
 
-    **Как авторизоваться:** выполните `POST /login`, нажмите **Authorize** и вставьте `Bearer <token>`.
+    **Как авторизоваться:** выполните `POST /login`, нажмите **Authorize** и вставьте `Bearer <token>`. Токен живёт 15 минут, новую пару выдаёт `POST /refresh`.
 
     **Ошибки** возвращаются обычным текстом (`text/plain`), например `chat not found`. Если вы не участник чата, API отвечает 404, чтобы не раскрывать, что чат существует.
   title: PingPong API
@@ -1103,8 +1112,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: 'Проверяет email и пароль и выдаёт JWT (HS256, живёт 24 часа).
-        Токен передаётся в заголовке `Authorization: Bearer <token>`.'
+      description: 'Проверяет email и пароль и выдаёт пару токенов. `token` — access
+        JWT (HS256, живёт 15 минут), передаётся в заголовке `Authorization: Bearer
+        <token>`. `refresh_token` живёт 30 дней и нужен, чтобы получить новую пару
+        через `POST /refresh`.'
       parameters:
       - description: Email и пароль
         in: body
@@ -1116,7 +1127,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: JWT
+          description: Пара токенов
           schema:
             $ref: '#/definitions/LoginResponse'
         "400":
@@ -1136,6 +1147,37 @@ paths:
           schema:
             type: string
       summary: Вход
+      tags:
+      - auth
+  /logout:
+    post:
+      consumes:
+      - application/json
+      description: Удаляет refresh-токен. Access-токен не нужен. Повторный выход тоже
+        возвращает 204.
+      parameters:
+      - description: Refresh-токен
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/RefreshRequest'
+      responses:
+        "204":
+          description: Токен удалён
+        "400":
+          description: invalid JSON
+          schema:
+            type: string
+        "429":
+          description: too many requests
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      summary: Выход
       tags:
       - auth
   /me:
@@ -1163,6 +1205,45 @@ paths:
       security:
       - BearerAuth: []
       summary: Текущий пользователь
+      tags:
+      - auth
+  /refresh:
+    post:
+      consumes:
+      - application/json
+      description: Меняет refresh-токен на новую пару токенов. Старый refresh-токен
+        после этого перестаёт работать (ротация).
+      parameters:
+      - description: Refresh-токен из /login или /refresh
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/RefreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Новая пара токенов
+          schema:
+            $ref: '#/definitions/LoginResponse'
+        "400":
+          description: invalid JSON
+          schema:
+            type: string
+        "401":
+          description: invalid refresh token
+          schema:
+            type: string
+        "429":
+          description: too many requests
+          schema:
+            type: string
+        "500":
+          description: internal error
+          schema:
+            type: string
+      summary: Обновление токенов
       tags:
       - auth
   /register:

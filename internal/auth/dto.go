@@ -31,4 +31,4 @@ type meResponse struct {
 
 type refreshRequest struct {
 	RefreshToken string `json:"refresh_token" example:"9f2c4e7a1b..."`
-}
+} //@name RefreshRequest
