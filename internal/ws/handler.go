@@ -131,6 +131,7 @@ func (h *Handler) ServeWS(rw http.ResponseWriter, r *http.Request) {
 			UserID:    msgDomain.UserID,
 			Message:   msgDomain.Message,
 			CreatedAt: msgDomain.CreatedAt,
+			Mentions:  msgDomain.Mentions,
 		}
 
 		if msgDomain.ReplyToID != nil && msgDomain.ReplyUserID != nil && msgDomain.ReplyMessage != nil {

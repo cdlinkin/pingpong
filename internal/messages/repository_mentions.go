@@ -41,3 +41,32 @@ func (r *Repository) AddMentions(
 
 	return ids, nil
 }
+
+func (r *Repository) ListMentions(
+	ctx context.Context,
+	msgIDs []int,
+) ([]MentionModel, error) {
+	query := `
+	SELECT message_id, user_id
+	FROM message_mentions
+	WHERE message_id = ANY($1);
+	`
+
+	rows, err := r.pool.Query(ctx, query, msgIDs)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"list mentions: %w",
+			err,
+		)
+	}
+
+	mentions, err := pgx.CollectRows(rows, pgx.RowToStructByPos[MentionModel])
+	if err != nil {
+		return nil, fmt.Errorf(
+			"collect mentions: %w",
+			err,
+		)
+	}
+
+	return mentions, nil
+}

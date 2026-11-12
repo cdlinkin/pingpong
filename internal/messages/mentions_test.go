@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestParseMentions(t *testing.T) {
@@ -88,4 +89,35 @@ func TestSendMessageMentions(t *testing.T) {
 			t.Fatalf("want mentions [3], got %v", msg.Mentions)
 		}
 	})
+}
+
+func TestListMessageMentions(t *testing.T) {
+	ctx := context.Background()
+	repo := newFakeRepo()
+	deletedAt := time.Now()
+	repo.listed = []MessageModel{
+		{ID: 3, ChatID: chatID, UserID: member},
+		{ID: 2, ChatID: chatID, UserID: member, DeletedAt: &deletedAt},
+		{ID: 1, ChatID: chatID, UserID: 3},
+	}
+	repo.mentions = []MentionModel{
+		{MsgID: 3, UserID: 3},
+		{MsgID: 3, UserID: 4},
+		{MsgID: 2, UserID: 3},
+		{MsgID: 99, UserID: 3},
+	}
+
+	msgs, err := NewService(repo, newFakeStorage()).ListMessage(ctx, member, chatID, 0, 20)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if !slices.Equal(msgs[0].Mentions, []int{3, 4}) {
+		t.Fatalf("message 3: want [3 4], got %v", msgs[0].Mentions)
+	}
+	if msgs[1].Mentions != nil {
+		t.Fatalf("deleted message must not show mentions, got %v", msgs[1].Mentions)
+	}
+	if msgs[2].Mentions != nil {
+		t.Fatalf("message 1: want no mentions, got %v", msgs[2].Mentions)
+	}
 }

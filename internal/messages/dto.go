@@ -20,6 +20,7 @@ type msgResponse struct {
 	ReplyTo    *replyResponse      `json:"reply_to,omitempty"`
 	Reactions  []reactionResponse  `json:"reactions,omitempty"`
 	Attachment *attachmentResponse `json:"attachment,omitempty"`
+	Mentions   []int               `json:"mentions,omitempty" example:"39"`
 } //@name Message
 
 type editedEvent struct {

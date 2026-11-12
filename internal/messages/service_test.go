@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"slices"
 	"testing"
 	"time"
 )
@@ -41,6 +42,7 @@ type fakeRepo struct {
 	logins       map[string]int
 	mentionCalls int
 	mentionErr   error
+	mentions     []MentionModel
 }
 
 func (f *fakeRepo) IsMember(ctx context.Context, chatID, userID int) (bool, error) {
@@ -173,6 +175,16 @@ func (f *fakeRepo) AddMentions(ctx context.Context, msgID, chatID, authorID int,
 		}
 	}
 	return ids, nil
+}
+
+func (f *fakeRepo) ListMentions(ctx context.Context, msgIDs []int) ([]MentionModel, error) {
+	var out []MentionModel
+	for _, m := range f.mentions {
+		if slices.Contains(msgIDs, m.MsgID) {
+			out = append(out, m)
+		}
+	}
+	return out, nil
 }
 
 func newFakeRepo() *fakeRepo {

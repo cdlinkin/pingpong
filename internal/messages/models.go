@@ -41,3 +41,8 @@ type ReactionModel struct {
 	UserID int
 	Emoji  string
 }
+
+type MentionModel struct {
+	MsgID  int
+	UserID int
+}

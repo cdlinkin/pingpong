@@ -24,6 +24,7 @@ type repository interface {
 	ListAttachments(ctx context.Context, msgIDs []int) ([]AttachmentModel, error)
 	GetAttachment(ctx context.Context, id int) (AttachmentModel, error)
 	AddMentions(ctx context.Context, msgID, chatID, authorID int, logins []string) ([]int, error)
+	ListMentions(ctx context.Context, msgIDs []int) ([]MentionModel, error)
 }
 
 type FileStorage interface {

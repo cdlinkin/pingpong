@@ -95,6 +95,10 @@ func (s *Service) ListMessage(
 		return nil, err
 	}
 
+	if err := s.fillMentions(ctx, messages, ids); err != nil {
+		return nil, err
+	}
+
 	return messages, nil
 }
 

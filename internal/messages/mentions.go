@@ -44,3 +44,26 @@ func (s *Service) addMentions(ctx context.Context, m *MessageModel) error {
 	m.Mentions = ids
 	return nil
 }
+
+func (s *Service) fillMentions(ctx context.Context, messages []MessageModel, ids []int) error {
+	mentions, err := s.repository.ListMentions(ctx, ids)
+	if err != nil {
+		return fmt.Errorf(
+			"list mentions: %w",
+			err,
+		)
+	}
+
+	byMsg := make(map[int][]int)
+	for _, m := range mentions {
+		byMsg[m.MsgID] = append(byMsg[m.MsgID], m.UserID)
+	}
+
+	for i := range messages {
+		if messages[i].DeletedAt == nil {
+			messages[i].Mentions = byMsg[messages[i].ID]
+		}
+	}
+
+	return nil
+}
